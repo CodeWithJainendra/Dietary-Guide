@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
+import { UserProfile } from '@/types';
 import Card from './Card';
 
 interface HealthStatsCardProps {
@@ -8,6 +9,9 @@ interface HealthStatsCardProps {
   value: string;
   status?: string;
   icon?: React.ReactNode;
+  profile?: UserProfile;
+  bmi?: number | null;
+  healthStatus?: string;
 }
 
 const HealthStatsCard: React.FC<HealthStatsCardProps> = ({
@@ -15,21 +19,28 @@ const HealthStatsCard: React.FC<HealthStatsCardProps> = ({
   value,
   status,
   icon,
+  profile,
+  bmi,
+  healthStatus,
 }) => {
   const { colors } = useTheme();
   
   // Determine status color
   const getStatusColor = () => {
-    if (!status) return colors.textSecondary;
+    if (!status && !healthStatus) return colors.textSecondary;
     
-    switch (status.toLowerCase()) {
+    const statusToCheck = status || healthStatus || '';
+    
+    switch (statusToCheck.toLowerCase()) {
       case 'underweight':
         return '#FFA726'; // Orange
       case 'normal weight':
+      case 'normal':
         return '#66BB6A'; // Green
       case 'overweight':
         return '#FFA726'; // Orange
       case 'obese':
+      case 'obesity':
         return '#EF5350'; // Red
       default:
         return colors.textSecondary;
@@ -45,12 +56,20 @@ const HealthStatsCard: React.FC<HealthStatsCardProps> = ({
       
       <View style={styles.content}>
         <Text style={[styles.value, { color: colors.primary }]}>{value}</Text>
-        {status && (
+        {(status || healthStatus) && (
           <Text style={[styles.status, { color: getStatusColor() }]}>
-            {status}
+            {status || healthStatus}
           </Text>
         )}
       </View>
+      
+      {profile && (
+        <View style={styles.profileInfo}>
+          <Text style={[styles.profileText, { color: colors.textSecondary }]}>
+            {profile.age} years old • {profile.height}cm • {profile.weight}kg
+          </Text>
+        </View>
+      )}
     </Card>
   );
 };
@@ -81,6 +100,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
+  profileInfo: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  profileText: {
+    fontSize: 14,
+  },
 });
 
 export default HealthStatsCard;
+
+export { HealthStatsCard }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useUserStore } from '@/store/userStore';
 import Input from './Input';
@@ -41,7 +42,7 @@ export default function LogMealForm({ onSubmit }: LogMealFormProps) {
           text: "Choose from Gallery",
           onPress: () => {
             // For demo, we'll use a sample food image
-            setSelectedImage('https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=1000&auto=format&fit=crop');
+            setSelectedImage('https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1');
             if (!foodName) {
               setFoodName('Mixed Salad Bowl');
             }

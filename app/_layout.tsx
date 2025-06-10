@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Stack, SplashScreen, Slot } from 'expo-router';
+import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, ActivityIndicator, Text, Alert, Platform } from 'react-native';
@@ -10,6 +10,7 @@ import { trpc, trpcClient } from '@/lib/trpc';
 import { isAuthenticated, getUserProfile, getStoredTokens, logout } from '@/lib/auth0';
 import { getUserProfileFromSupabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -222,6 +223,7 @@ function RootLayoutContent() {
             title: 'Plan Details',
           }}
         />
+        <Stack.Screen name="+not-found" />
       </Stack>
       
       {/* Error toast is completely disabled */}
@@ -246,6 +248,9 @@ function RootLayoutContent() {
 // Root layout with theme provider
 export default function RootLayout() {
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // CRITICAL: This hook is required and must never be removed
+  useFrameworkReady();
   
   useEffect(() => {
     // Initialize user store
