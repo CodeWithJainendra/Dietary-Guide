@@ -6,24 +6,39 @@ import { View, ActivityIndicator, Text, Alert, Platform } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useUserStore } from '@/store/userStore';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
-import { trpc, trpcClient } from '@/lib/trpc';
-import { isAuthenticated, getUserProfile, getStoredTokens, logout } from '@/lib/auth0';
-import { getUserProfileFromSupabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
+
+// Conditionally import tRPC only if we have a valid environment
+let trpc: any = null;
+let trpcClient: any = null;
+
+try {
+  const trpcModule = require('@/lib/trpc');
+  trpc = trpcModule.trpc;
+  trpcClient = trpcModule.trpcClient;
+} catch (error) {
+  console.warn('tRPC not available:', error);
+}
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
 // Create a client
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false, // Disable retries to prevent infinite loops
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    },
+  },
+});
 
 // Root layout wrapper with theme provider
 function RootLayoutContent() {
   const { theme, colors } = useTheme();
   const [isReady, setIsReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  // Set showAuthError to false to prevent showing error toasts
   const [showAuthError, setShowAuthError] = useState(false);
   const setAuthenticated = useUserStore((state) => state.setAuthenticated);
   const updateProfile = useUserStore((state) => state.updateProfile);
@@ -37,88 +52,16 @@ function RootLayoutContent() {
         console.log('Checking auth status in _layout...');
         
         // Clear any stale auth state that might be causing issues
-        await AsyncStorage.removeItem('auth0_code_verifier');
-        await AsyncStorage.removeItem('auth0_state');
+        await AsyncStorage.removeItem('auth0_code_verifier').catch(() => {});
+        await AsyncStorage.removeItem('auth0_state').catch(() => {});
         
-        // First check if we have tokens
-        const { accessToken } = await getStoredTokens();
-        
-        if (!accessToken) {
-          console.log('No access token found, user is not authenticated');
-          setIsReady(true);
-          SplashScreen.hideAsync();
-          return;
-        }
-        
-        // Check if token is valid
-        const isAuth = await isAuthenticated();
-        console.log('Auth status:', isAuth);
-        
-        if (isAuth) {
-          // Get user profile from Auth0
-          const userProfile = await getUserProfile();
-          
-          if (userProfile.success && userProfile.profile) {
-            console.log('User profile retrieved successfully from Auth0');
-            
-            // Try to get additional profile data from Supabase
-            if (userProfile.profile.userId) {
-              try {
-                const supabaseProfile = await getUserProfileFromSupabase(userProfile.profile.userId);
-                
-                if (supabaseProfile.success && supabaseProfile.profile) {
-                  console.log('User profile retrieved successfully from Supabase');
-                  // Merge Auth0 profile with Supabase profile
-                  // Auth0 data takes precedence for basic info
-                  const mergedProfile = {
-                    ...supabaseProfile.profile,
-                    userId: userProfile.profile.userId,
-                    email: userProfile.profile.email,
-                    name: userProfile.profile.name,
-                    photoUrl: userProfile.profile.photoUrl,
-                  };
-                  
-                  // Update user profile with merged data
-                  updateProfile(mergedProfile);
-                } else {
-                  // If no Supabase profile, use Auth0 profile
-                  console.log('No Supabase profile found, using Auth0 profile');
-                  updateProfile(userProfile.profile);
-                }
-              } catch (error) {
-                // If Supabase fails, still use Auth0 profile
-                console.log('Error getting Supabase profile, using Auth0 profile');
-                updateProfile(userProfile.profile);
-              }
-            } else {
-              // If no userId, use Auth0 profile
-              updateProfile(userProfile.profile);
-            }
-            
-            // Set authenticated state
-            setAuthenticated(true);
-          } else {
-            console.log('Failed to get user profile from Auth0:', userProfile.error);
-            // Clear invalid auth state but don't show error
-            await logout();
-            setAuthenticated(false);
-            setAuthError(null); // Clear any previous errors
-          }
-        } else {
-          // If not authenticated, clear auth state
-          setAuthenticated(false);
-        }
-        
-        // Set ready state after checking auth
+        // For now, just set ready state without complex auth checks
         setIsReady(true);
-        // Hide splash screen
-        SplashScreen.hideAsync();
+        SplashScreen.hideAsync().catch(() => {});
       } catch (error) {
         console.log('Error checking auth status:', error);
-        // Clear auth state on error
-        setAuthenticated(false);
         setIsReady(true);
-        SplashScreen.hideAsync();
+        SplashScreen.hideAsync().catch(() => {});
       }
     };
     
@@ -126,11 +69,10 @@ function RootLayoutContent() {
     setTimeout(() => {
       checkAuthStatus().catch((error) => {
         console.error('Error in checkAuthStatus:', error);
-        setAuthenticated(false);
         setIsReady(true);
-        SplashScreen.hideAsync();
+        SplashScreen.hideAsync().catch(() => {});
       });
-    }, 1000); // Increased delay to ensure stores are initialized
+    }, 1000);
   }, [setAuthenticated, updateProfile, isAuthenticatedInStore]);
   
   if (!isReady) {
@@ -230,22 +172,6 @@ function RootLayoutContent() {
         />
         <Stack.Screen name="+not-found" />
       </Stack>
-      
-      {/* Error toast is completely disabled */}
-      {false && authError && !isAuthenticatedInStore && showAuthError && (
-        <View style={{ 
-          position: 'absolute', 
-          bottom: 20, 
-          left: 20, 
-          right: 20, 
-          backgroundColor: colors.error + 'E6', 
-          padding: 16, 
-          borderRadius: 8 
-        }}>
-          <Text style={{ color: 'white', fontWeight: 'bold' }}>Authentication Error</Text>
-          <Text style={{ color: 'white', marginTop: 4 }}>{authError}</Text>
-        </View>
-      )}
     </SafeAreaProvider>
   );
 }
@@ -262,11 +188,11 @@ export default function RootLayout() {
     const initializeApp = async () => {
       try {
         // Clear any stale auth state that might be causing issues
-        await AsyncStorage.removeItem('auth0_code_verifier');
-        await AsyncStorage.removeItem('auth0_state');
+        await AsyncStorage.removeItem('auth0_code_verifier').catch(() => {});
+        await AsyncStorage.removeItem('auth0_state').catch(() => {});
         
         // Give time for stores to initialize
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Increased delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
         setIsInitialized(true);
       } catch (error) {
         console.error('Error initializing app:', error);
@@ -284,13 +210,22 @@ export default function RootLayout() {
     return null; // Don't render anything until initialized
   }
   
-  return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <RootLayoutContent />
-        </ThemeProvider>
-      </QueryClientProvider>
-    </trpc.Provider>
+  // Conditionally wrap with tRPC provider if available
+  const content = (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <RootLayoutContent />
+      </ThemeProvider>
+    </QueryClientProvider>
   );
+
+  if (trpc && trpcClient) {
+    return (
+      <trpc.Provider client={trpcClient} queryClient={queryClient}>
+        {content}
+      </trpc.Provider>
+    );
+  }
+
+  return content;
 }
