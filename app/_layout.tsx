@@ -124,7 +124,12 @@ function RootLayoutContent() {
     
     // Add a slight delay to ensure stores are initialized
     setTimeout(() => {
-      checkAuthStatus();
+      checkAuthStatus().catch((error) => {
+        console.error('Error in checkAuthStatus:', error);
+        setAuthenticated(false);
+        setIsReady(true);
+        SplashScreen.hideAsync();
+      });
     }, 1000); // Increased delay to ensure stores are initialized
   }, [setAuthenticated, updateProfile, isAuthenticatedInStore]);
   
@@ -269,7 +274,10 @@ export default function RootLayout() {
       }
     };
     
-    initializeApp();
+    initializeApp().catch((error) => {
+      console.error('Error in initializeApp:', error);
+      setIsInitialized(true); // Still proceed even if there's an error
+    });
   }, []);
   
   if (!isInitialized) {
