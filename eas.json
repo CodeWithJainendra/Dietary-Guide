@@ -13,12 +13,14 @@
     },
     "production": {
       "autoIncrement": true
-    },
-    "hooks": {
-      "post-install": ".eas/build/post-install.sh"
     }
   },
   "submit": {
     "production": {}
+  },
+  "hooks": {
+    "build": {
+      "post-install": ".eas/build/post-install.sh"
+    }
   }
 }
