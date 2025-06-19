@@ -17,10 +17,5 @@
   },
   "submit": {
     "production": {}
-  },
-  "hooks": {
-    "build": {
-      "post-install": ".eas/build/post-install.sh"
-    }
   }
 }
