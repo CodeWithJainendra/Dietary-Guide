@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserProfile, GoogleEvent, GoogleTask, GoogleTaskList } from '@/types';
-import { saveUserProfile, updateUserProfile as updateSupabaseProfile } from '@/lib/supabase';
+import { saveUserProfile, updateUserProfile as updateSupabaseProfile, getUserProfileFromSupabase } from '@/lib/supabase';
 
 interface UserState {
   profile: UserProfile | null;
@@ -17,8 +17,8 @@ interface UserState {
   };
   googleTokens: {
     accessToken: string | null;
-    refreshToken: string | null;
-    expiresAt: number | null;
+    refreshToken?: string | null;
+    expiresAt?: number | null;
   };
   googleCalendarEvents: GoogleEvent[];
   googleTasks: GoogleTask[];
@@ -29,7 +29,7 @@ interface UserState {
   setAuthenticated: (value: boolean) => void;
   setThemePreference: (theme: 'system' | 'light' | 'dark') => void;
   setAuth0Tokens: (tokens: { accessToken: string; idToken: string; refreshToken?: string; expiresAt?: number }) => void;
-  setGoogleTokens: (tokens: { accessToken: string; refreshToken?: string; expiresAt?: number }) => void;
+  setGoogleTokens: (tokens: { accessToken: string | null; refreshToken?: string | null; expiresAt?: number | null }) => void;
   setGoogleCalendarEvents: (events: GoogleEvent[]) => void;
   setGoogleTasks: (tasks: GoogleTask[]) => void;
   setGoogleTaskLists: (taskLists: GoogleTaskList[]) => void;
@@ -37,6 +37,7 @@ interface UserState {
   getHealthStatus: () => string;
   checkAuth: () => boolean;
   logout: () => void;
+  fetchProfile: (userId: string) => Promise<void>;
 }
 
 export const useUserStore = create<UserState>()(
@@ -122,7 +123,8 @@ export const useUserStore = create<UserState>()(
         }
         
         return { 
-          profile: updatedProfile
+          profile: updatedProfile,
+          isOnboarded: true
         };
       }),
       
@@ -202,6 +204,20 @@ export const useUserStore = create<UserState>()(
         googleTasks: [],
         googleTaskLists: []
       }),
+      
+      fetchProfile: async (userId: string) => {
+        if (!userId) return;
+        try {
+          const { success, profile, error } = await getUserProfileFromSupabase(userId);
+          if (success && profile) {
+            set({ profile, isOnboarded: true });
+          } else {
+            console.error('Failed to fetch profile:', error);
+          }
+        } catch (err) {
+          console.error('Error in fetchProfile:', err);
+        }
+      },
     }),
     {
       name: 'user-storage',

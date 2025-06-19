@@ -219,3 +219,21 @@ export async function fetchGoogleTasks(taskListId: string): Promise<GoogleTask[]
     return [];
   }
 }
+
+// Fetch Google profile photo using Google People API
+export async function getGoogleProfilePhoto(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      'https://people.googleapis.com/v1/people/me?personFields=photos',
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+    const data = await res.json();
+    const photoUrl = data.photos?.[0]?.url;
+    return photoUrl || null;
+  } catch (err) {
+    console.error('Failed to fetch Google profile photo:', err);
+    return null;
+  }
+}

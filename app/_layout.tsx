@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, ActivityIndicator, Text, Alert, Platform } from 'react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { View, ActivityIndicator, Text, Alert, Platform, Image } from 'react-native';
 import { useUserStore } from '@/store/userStore';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
+const logoLight = require('../assets/images/logo-light.png');
+const logoDark = require('../assets/images/logo-dark.png');
 
 // Conditionally import tRPC only if we have a valid environment
 let trpc: any = null;
@@ -25,14 +26,14 @@ try {
 SplashScreen.preventAutoHideAsync();
 
 // Create a client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false, // Disable retries to prevent infinite loops
-      staleTime: 1000 * 60 * 5, // 5 minutes
-    },
-  },
-});
+// const queryClient = new QueryClient({
+//   defaultOptions: {
+//     queries: {
+//       retry: false, // Disable retries to prevent infinite loops
+//       staleTime: 1000 * 60 * 5, // 5 minutes
+//     },
+//   },
+// });
 
 // Root layout wrapper with theme provider
 function RootLayoutContent() {
@@ -44,6 +45,11 @@ function RootLayoutContent() {
   const updateProfile = useUserStore((state) => state.updateProfile);
   const isAuthenticatedInStore = useUserStore((state) => state.isAuthenticated);
   const isOnboarded = useUserStore((state) => state.isOnboarded);
+  const profile = useUserStore((state) => state.profile);
+  const fetchProfile = useUserStore((state) => state.fetchProfile);
+  
+  // Helper to select logo based on theme
+  const appLogo = theme === 'dark' ? logoDark : logoLight;
   
   // Check authentication status on mount
   useEffect(() => {
@@ -75,9 +81,29 @@ function RootLayoutContent() {
     }, 1000);
   }, [setAuthenticated, updateProfile, isAuthenticatedInStore]);
   
+  // Fetch user profile on app load if not already loaded
+  useEffect(() => {
+    const tryFetchProfile = async () => {
+      // Try to get userId from persisted profile or auth0 tokens
+      let userId = profile?.id || profile?.userId;
+      if (!userId) {
+        // Try to get from auth0 tokens if available (customize as needed)
+        // Example: const idToken = useUserStore.getState().auth0.idToken;
+        // Parse userId from idToken if your app supports it
+      }
+      if (userId) {
+        await fetchProfile(userId.toString());
+      }
+    };
+    if (!profile) {
+      tryFetchProfile();
+    }
+  }, [profile, fetchProfile]);
+  
   if (!isReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <Image source={appLogo} style={{ width: 120, height: 120, marginBottom: 24 }} resizeMode="contain" />
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={{ marginTop: 16, color: colors.text }}>Loading...</Text>
       </View>
@@ -212,16 +238,14 @@ export default function RootLayout() {
   
   // Conditionally wrap with tRPC provider if available
   const content = (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <RootLayoutContent />
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <RootLayoutContent />
+    </ThemeProvider>
   );
 
   if (trpc && trpcClient) {
     return (
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <trpc.Provider client={trpcClient}>
         {content}
       </trpc.Provider>
     );

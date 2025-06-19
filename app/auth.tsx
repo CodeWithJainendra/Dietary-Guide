@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Image, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/contexts/ThemeContext';
 import { loginWithAuth0 } from '@/lib/auth0';
+import { supabase } from '@/lib/supabase';
 import { useUserStore } from '@/store/userStore';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
@@ -12,6 +13,10 @@ import { Lock, User } from 'lucide-react-native';
 export default function AuthScreen() {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [modalVisible, setModalVisible] = useState(true);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const setAuthenticated = useUserStore((state) => state.setAuthenticated);
   const updateProfile = useUserStore((state) => state.updateProfile);
   
@@ -130,6 +135,19 @@ export default function AuthScreen() {
     }
   };
   
+  const handleSendMagicLink = async () => {
+    setLoading(true);
+    setError('');
+    setMessage('');
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      setMessage('A sign-in link has been sent to your email. Please check your inbox and verify.');
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
@@ -167,6 +185,48 @@ export default function AuthScreen() {
           )}
         </View>
       </Card>
+      
+      <Modal
+        visible={modalVisible}
+        animationType="fade"
+        transparent
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.centeredView}
+        >
+          <View style={[styles.modalView, { backgroundColor: colors.card }]}> 
+            <View style={styles.iconContainer}>
+              <View style={styles.iconEnvelope}>
+                <Text style={styles.iconText}>📧</Text>
+              </View>
+            </View>
+            <Text style={[styles.title, { color: colors.primary }]}>That newsletter you'll read</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Are you ready for the best newsletter you've ever read? Seriously. THE BEST</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={[styles.input, { borderColor: colors.primary, color: colors.text }]}
+                placeholder="the email you actually check"
+                placeholderTextColor={colors.textSecondary}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {message ? <Text style={styles.success}>{message}</Text> : null}
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: colors.primary }]}
+              onPress={handleSendMagicLink}
+              disabled={loading || !email}
+            >
+              <Text style={styles.buttonText}>{loading ? 'Sending...' : 'Send me the goods'}</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
       
       <View style={styles.footer}>
         <Text style={[styles.footerText, { color: colors.textSecondary }]}>
@@ -237,6 +297,67 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
+    textAlign: 'center',
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  modalView: {
+    width: 340,
+    borderRadius: 18,
+    padding: 28,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  iconEnvelope: {
+    backgroundColor: '#e6f0fa',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconText: {
+    fontSize: 36,
+  },
+  inputContainer: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  input: {
+    width: '100%',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
+  button: {
+    width: '100%',
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  error: {
+    color: '#e74c3c',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  success: {
+    color: '#27ae60',
+    marginBottom: 8,
     textAlign: 'center',
   },
 });

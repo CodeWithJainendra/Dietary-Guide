@@ -20,10 +20,11 @@ import ChatMessage from '@/components/ChatMessage';
 import { Message, CoreMessage } from '@/types';
 import { chatWithAI } from '@/utils/aiService';
 import { Send, Sparkles, Mic, MicOff } from 'lucide-react-native';
+import { supabase, saveChatMessage, fetchChatHistory } from '@/lib/supabase';
 
 export default function ChatScreen() {
   const { colors } = useTheme();
-  const { messages, addMessage, isLoading, setLoading } = useChatStore();
+  const { messages, addMessage, isLoading, setLoading, setMessages } = useChatStore();
   const profile = useUserStore((state) => state.profile);
   const setAvatarMood = useNutritionStore((state) => state.setAvatarMood);
   
@@ -94,41 +95,73 @@ export default function ChatScreen() {
     }, 3000);
   };
   
+  // On mount, fetch chat history from Supabase and set in store
+  useEffect(() => {
+    const loadHistory = async () => {
+      // Use profile.userId if profile.id is missing
+      const userId = profile?.id || profile?.userId;
+      if (userId) {
+        const { success, messages } = await fetchChatHistory(userId.toString());
+        if (success && Array.isArray(messages)) {
+          // Convert Supabase rows to Message[]
+          const formatted = messages.map((msg: any) => ({
+            id: msg.id || msg.created_at,
+            role: msg.sender,
+            content: msg.message,
+            timestamp: new Date(msg.created_at).getTime(),
+          }));
+          setMessages(formatted);
+        }
+      }
+    };
+    loadHistory();
+  }, [profile?.id, profile?.userId]);
+
   const handleSend = async () => {
-    if (!inputText.trim() || isLoading) return;
-    
+    if (!inputText.trim()) return;
+    // Use profile.userId if profile.id is missing
+    const userId = profile?.id || profile?.userId;
+    if (!userId) return; // Ensure user is loaded
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: inputText,
       timestamp: Date.now(),
     };
-    
     addMessage(userMessage);
     setInputText('');
-    
-    // Check for mood indicators in the message and set positive moods
-    const content = inputText.toLowerCase();
-    if (content.includes('great') || content.includes('awesome') || content.includes('excellent')) {
-      setAvatarMood('very_happy');
-    } else if (content.includes('good') || content.includes('better') || content.includes('progress')) {
-      setAvatarMood('proud');
-    } else if (content.includes('help') || content.includes('support')) {
-      setAvatarMood('caring');
-    } else if (content.includes('excited') || content.includes('motivated')) {
-      setAvatarMood('excited');
-    } else if (content.includes('confused') || content.includes("don't know")) {
-      setAvatarMood('supportive');
-    } else if (content.includes('thank')) {
-      setAvatarMood('humble');
-    } else if (content.includes('please')) {
-      setAvatarMood('polite');
-    } else {
-      setAvatarMood('encouraging');
-    }
-    
     try {
-      setLoading(true);
+      await saveChatMessage({
+        userId: userId.toString(),
+        message: userMessage.content,
+        sender: userMessage.role,
+        timestamp: userMessage.timestamp,
+      });
+    } catch (e) {
+      console.error('Failed to save user message to Supabase:', e);
+    }
+    setLoading(true);
+    try {
+      // Check for mood indicators in the message and set positive moods
+      const content = inputText.toLowerCase();
+      if (content.includes('great') || content.includes('awesome') || content.includes('excellent')) {
+        setAvatarMood('very_happy');
+      } else if (content.includes('good') || content.includes('better') || content.includes('progress')) {
+        setAvatarMood('proud');
+      } else if (content.includes('help') || content.includes('support')) {
+        setAvatarMood('caring');
+      } else if (content.includes('excited') || content.includes('motivated')) {
+        setAvatarMood('excited');
+      } else if (content.includes('confused') || content.includes("don't know")) {
+        setAvatarMood('supportive');
+      } else if (content.includes('thank')) {
+        setAvatarMood('humble');
+      } else if (content.includes('please')) {
+        setAvatarMood('polite');
+      } else {
+        setAvatarMood('encouraging');
+      }
       
       // Create system prompt with user context
       const systemPrompt = `You are a friendly, encouraging AI wellness companion. Always be positive, supportive, and motivational.
@@ -180,10 +213,17 @@ export default function ChatScreen() {
       };
       
       addMessage(assistantMessage);
-      
-      // Speak the response if on native platform
-      if (Platform.OS !== 'web') {
-        speakMessage(response);
+      const userId = profile?.id || profile?.userId;
+      if (!userId) return;
+      try {
+        await saveChatMessage({
+          userId: userId.toString(),
+          message: assistantMessage.content,
+          sender: assistantMessage.role,
+          timestamp: assistantMessage.timestamp,
+        });
+      } catch (e) {
+        console.error('Failed to save assistant message to Supabase:', e);
       }
     } catch (error) {
       console.error('Error in chat:', error);

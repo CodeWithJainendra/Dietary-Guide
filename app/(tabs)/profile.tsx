@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -9,7 +9,10 @@ import {
   Alert,
   TextInput,
   Platform,
-  Image
+  Image,
+  BackHandler,
+  Appearance,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -37,6 +40,21 @@ import {
   Activity,
   Target
 } from 'lucide-react-native';
+import { supabase } from '@/lib/supabase';
+import * as SecureStore from 'expo-secure-store';
+import { getGoogleProfilePhoto } from '@/utils/googleService';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+
+const defaultProfileImage = require('../../assets/images/userprofileimage.png');
+
+// TODO: Replace with your real Google OAuth client ID for Expo
+const GOOGLE_CLIENT_ID = '189295017514-66uf95g2gf858l7lh55p01kqm5bq1lr3.apps.googleusercontent.com';
+const GOOGLE_REDIRECT_URI = AuthSession.makeRedirectUri();
+const GOOGLE_AUTH_DISCOVERY = {
+  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenEndpoint: 'https://oauth2.googleapis.com/token',
+};
 
 export default function ProfileScreen() {
   const { theme, colors, toggleTheme, setThemeMode } = useTheme();
@@ -57,30 +75,92 @@ export default function ProfileScreen() {
   
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState(profile);
-  const [profileImage, setProfileImage] = useState<string | undefined>(
-    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=1780&auto=format&fit=crop'
-  );
+  const [profileImage, setProfileImage] = useState<string | undefined>(defaultProfileImage);
+  // Modal and connection state for Google Calendar/Tasks
+  const [googleModalVisible, setGoogleModalVisible] = useState(false);
+  const [googleModalType, setGoogleModalType] = useState<'connect' | 'disconnect'>('connect');
+  const isGoogleConnected = !!googleTokens?.accessToken;
   
   const bmi = calculateBMI();
   const healthStatus = getHealthStatus();
   
-  const handleLogout = () => {
-    Alert.alert(
-      "Confirm Logout",
-      "Are you sure you want to log out?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: () => {
-            logout();
-            router.replace('/');
-          }
+  useEffect(() => {
+    setProfileImage(defaultProfileImage);
+  }, []);
+  
+  useEffect(() => {
+    const fetchProfileImage = async () => {
+      if (profile?.email) {
+        // Fetch the profile from Supabase by email
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('photoUrl')
+          .eq('email', profile.email)
+          .single();
+        if (data && data.photoUrl) {
+          // Optionally: update the profile in Zustand store
+          // If you want to update the profile globally:
+          // useUserStore.getState().setProfile({ ...profile, photoUrl: data.photoUrl });
+          setProfileImage(data.photoUrl);
         }
+      }
+    };
+    fetchProfileImage();
+  }, [profile?.email]);
+  
+  useEffect(() => {
+    if (themePreference === 'system') {
+      setThemeMode(Appearance.getColorScheme() || 'light');
+      const subscription = Appearance.addChangeListener(({ colorScheme }) => {
+        setThemeMode(colorScheme || 'light');
+      });
+      return () => subscription.remove();
+    } else {
+      setThemeMode(themePreference);
+    }
+  }, [themePreference, setThemeMode]);
+  
+  useEffect(() => {
+    const fetchGoogleProfileImage = async () => {
+      // If user has a Google access token, fetch their Gmail/Google profile photo
+      if (googleTokens?.accessToken) {
+        try {
+          const photoUrl = await getGoogleProfilePhoto(googleTokens.accessToken);
+          if (photoUrl) {
+            setProfileImage(photoUrl);
+            // Optionally update Zustand and Supabase here
+          }
+        } catch (err) {
+          console.warn('Failed to fetch Google profile photo:', err);
+        }
+      }
+    };
+    fetchGoogleProfileImage();
+  }, [googleTokens?.accessToken]);
+  
+  const handleLogout = async () => {
+    Alert.alert(
+      'Confirm Logout',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.auth.signOut();
+            } catch (e) {}
+            // Remove credentials from SecureStore
+            await SecureStore.deleteItemAsync('user_email');
+            await SecureStore.deleteItemAsync('user_password');
+            logout();
+            router.replace('/splash');
+            if (Platform.OS === 'android') {
+              setTimeout(() => BackHandler.exitApp(), 1000);
+            }
+          },
+        },
       ]
     );
   };
@@ -176,32 +256,55 @@ export default function ProfileScreen() {
     );
   };
   
-  const handleReconnectGoogle = async () => {
-    Alert.alert(
-      "Reconnect Google Services",
-      "This will reconnect your Google Calendar and Tasks. Continue?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Continue",
-          onPress: async () => {
-            try {
-              // In a real app, you would initiate the OAuth flow here
-              Alert.alert(
-                "Google Services",
-                "This would reconnect to Google Calendar and Tasks in a real app."
-              );
-            } catch (error) {
-              console.error('Error reconnecting Google services:', error);
-              Alert.alert("Error", "Failed to reconnect Google services. Please try again.");
-            }
-          }
-        }
-      ]
-    );
+  const handleGoogleConnect = async () => {
+    try {
+      WebBrowser.maybeCompleteAuthSession();
+      const request = new AuthSession.AuthRequest({
+        clientId: GOOGLE_CLIENT_ID,
+        redirectUri: GOOGLE_REDIRECT_URI,
+        scopes: [
+          'openid',
+          'profile',
+          'email',
+          'https://www.googleapis.com/auth/calendar',
+          'https://www.googleapis.com/auth/tasks',
+        ],
+        responseType: AuthSession.ResponseType.Token,
+      });
+      await request.makeAuthUrlAsync(GOOGLE_AUTH_DISCOVERY);
+      const result = await request.promptAsync(GOOGLE_AUTH_DISCOVERY);
+      if (result.type === 'success' && result.authentication?.accessToken) {
+        setGoogleTokens({ accessToken: result.authentication.accessToken });
+        setGoogleModalVisible(false);
+        Alert.alert('Connected', 'Google Calendar & Tasks connected successfully.');
+      } else if (result.type === 'error') {
+        setGoogleModalVisible(false);
+        const errorMsg = typeof result.error === 'string' ? result.error : 'Could not connect to Google.';
+        Alert.alert('Google Connect Failed', errorMsg);
+      } else {
+        setGoogleModalVisible(false);
+        Alert.alert('Google Connect Cancelled', 'Google authentication was cancelled.');
+      }
+    } catch (err) {
+      setGoogleModalVisible(false);
+      Alert.alert('Google Connect Error', 'An error occurred during Google authentication.');
+    }
+  };
+  
+  const handleGoogleDisconnect = async () => {
+    setGoogleTokens({ accessToken: null, refreshToken: null, expiresAt: null });
+    setGoogleModalVisible(false);
+    Alert.alert('Disconnected', 'Google Calendar & Tasks disconnected.');
+  };
+  
+  const handleGoogleServicePress = () => {
+    if (isGoogleConnected) {
+      setGoogleModalType('disconnect');
+      setGoogleModalVisible(true);
+    } else {
+      setGoogleModalType('connect');
+      setGoogleModalVisible(true);
+    }
   };
   
   const handleThemeChange = (value: 'system' | 'light' | 'dark') => {
@@ -229,6 +332,15 @@ export default function ProfileScreen() {
     );
   };
   
+  useEffect(() => {
+    // Theme-based profile image logic
+    if (theme === 'dark') {
+      setProfileImage(require('../../assets/images/userprofileimagewhite.png'));
+    } else {
+      setProfileImage(defaultProfileImage);
+    }
+  }, [theme]);
+  
   if (!profile) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -255,7 +367,7 @@ export default function ProfileScreen() {
           <View style={styles.profileImageContainer}>
             {profileImage ? (
               <Image 
-                source={{ uri: profileImage }} 
+                source={typeof profileImage === 'string' ? { uri: profileImage } : profileImage} 
                 style={styles.profileImage} 
               />
             ) : (
@@ -489,7 +601,7 @@ export default function ProfileScreen() {
           >
             {profileImage ? (
               <Image 
-                source={{ uri: profileImage }} 
+                source={typeof profileImage === 'string' ? { uri: profileImage } : profileImage} 
                 style={styles.profileImage} 
               />
             ) : (
@@ -681,23 +793,26 @@ export default function ProfileScreen() {
         
         <Card style={styles.card}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Connected Services</Text>
-          
           <TouchableOpacity 
             style={[styles.serviceRow, { borderBottomColor: colors.border }]}
-            onPress={handleReconnectGoogle}
+            onPress={handleGoogleServicePress}
           >
             <View style={styles.serviceInfo}>
               <Calendar size={20} color={colors.primary} />
               <Text style={[styles.serviceName, { color: colors.text }]}>Google Calendar & Tasks</Text>
             </View>
             <View style={styles.serviceStatus}>
-              {googleTokens.accessToken ? (
+              {isGoogleConnected ? (
                 <>
                   <Text style={[styles.serviceConnected, { color: colors.success }]}>Connected</Text>
                   <RefreshCw size={16} color={colors.primary} />
                 </>
               ) : (
-                <Text style={[styles.serviceDisconnected, { color: colors.error }]}>Disconnected</Text>
+                <Button
+                  title="Connect"
+                  onPress={handleGoogleServicePress}
+                  style={{ paddingVertical: 4, paddingHorizontal: 12, borderRadius: 8 }}
+                />
               )}
             </View>
           </TouchableOpacity>
@@ -733,6 +848,40 @@ export default function ProfileScreen() {
           <LogOut size={20} color={colors.error} />
           <Text style={[styles.logoutText, { color: colors.error }]}>Log Out</Text>
         </TouchableOpacity>
+        
+        {/* Google Connect/Disconnect Modal (React Native Modal) */}
+        <Modal
+          visible={googleModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setGoogleModalVisible(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: colors.card, padding: 24, borderRadius: 16, width: 320, alignItems: 'center' }}>
+              {googleModalType === 'connect' ? (
+                <>
+                  <Calendar size={32} color={colors.primary} />
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', marginVertical: 12, color: colors.text }}>Connect Google Calendar & Tasks</Text>
+                  <Text style={{ color: colors.textSecondary, textAlign: 'center', marginBottom: 16 }}>
+                    Connect your Google account to sync Calendar and Tasks.
+                  </Text>
+                  <Button title="Connect" onPress={handleGoogleConnect} style={{ marginBottom: 8 }} />
+                  <Button title="Cancel" variant="outline" onPress={() => setGoogleModalVisible(false)} />
+                </>
+              ) : (
+                <>
+                  <Calendar size={32} color={colors.primary} />
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', marginVertical: 12, color: colors.text }}>Disconnect Google Calendar & Tasks</Text>
+                  <Text style={{ color: colors.textSecondary, textAlign: 'center', marginBottom: 16 }}>
+                    Are you sure you want to disconnect Google Calendar & Tasks?
+                  </Text>
+                  <Button title="Disconnect" onPress={handleGoogleDisconnect} style={{ marginBottom: 8 }} />
+                  <Button title="Cancel" variant="outline" onPress={() => setGoogleModalVisible(false)} />
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1043,5 +1192,30 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     marginHorizontal: 24,
+  },
+  modalContainer: {
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalText: {
+    fontSize: 16,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    marginHorizontal: 4,
   },
 });
