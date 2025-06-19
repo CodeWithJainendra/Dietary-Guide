@@ -1,0 +1,11 @@
+diff --git a/node_modules/react-native/Libraries/Utilities/Platform.js b/node_modules/react-native/Libraries/Utilities/Platform.js
+new file mode 100644
+index 0000000..0048d24
+--- /dev/null
++++ b/node_modules/react-native/Libraries/Utilities/Platform.js
+@@ -0,0 +1,5 @@
++const Platform = {
++  OS: 'android', // or 'ios' as needed
++  select: (specifics) => specifics[Platform.OS] || specifics.default,
++};
++module.exports = Platform;
