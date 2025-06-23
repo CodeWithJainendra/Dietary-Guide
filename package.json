@@ -4,10 +4,9 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
-    "dev": "expo start --web",
+    "dev": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web",
     "test": "jest --watchAll",
     "lint": "expo lint",
     "postinstall": "cp patches/react-native/Libraries/Utilities/Platform.js node_modules/react-native/Libraries/Utilities/Platform.js || copy patches\\react-native\\Libraries\\Utilities\\Platform.js node_modules\\react-native\\Libraries\\Utilities\\Platform.js"
@@ -17,6 +16,7 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
+    "@lottiefiles/dotlottie-react": "^0.6.5",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-picker/picker": "^2.9.0",
     "@react-navigation/native": "^7.1.6",
@@ -49,7 +49,6 @@
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
     "react-native-svg": "15.11.2",
-    "react-native-web": "~0.20.0",
     "superjson": "^2.2.1",
     "zod": "^3.23.8",
     "zustand": "^4.5.5"
