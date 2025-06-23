@@ -9,15 +9,14 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest --watchAll",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "postinstall": "cp patches/react-native/Libraries/Utilities/Platform.js node_modules/react-native/Libraries/Utilities/Platform.js || copy patches\\react-native\\Libraries\\Utilities\\Platform.js node_modules\\react-native\\Libraries\\Utilities\\Platform.js"
   },
-  "postinstall": "patch-package",
   "jest": {
     "preset": "jest-expo"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
-    "@lottiefiles/dotlottie-react": "^0.6.5",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-picker/picker": "^2.9.0",
     "@react-navigation/native": "^7.1.6",
