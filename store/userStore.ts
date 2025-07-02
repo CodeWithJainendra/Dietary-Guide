@@ -63,15 +63,13 @@ export const useUserStore = create<UserState>()(
       googleTaskLists: [],
       
       setProfile: (profile) => {
-        // Save profile to Supabase
-        if (profile && profile.userId) {
-          saveUserProfile(profile).catch(error => {
-            console.log('Error saving profile to Supabase:', error);
-            // Continue even if Supabase save fails
-          });
-        }
-        
+        // Note: Supabase saving is now handled by the Clerk-Supabase integration
+        // This just updates the local store
         set({ profile, isOnboarded: true });
+      },
+
+      setOnboarded: (isOnboarded) => {
+        set({ isOnboarded });
       },
       
       updateProfile: (updates) => set((state) => {

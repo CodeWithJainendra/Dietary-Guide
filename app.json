@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "expo-app",
-    "slug": "expo-app",
+    "slug": "dietary-guide",
+    "name": "v1.0.0",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo-light.png",
-    "scheme": "app.rork.ai-powered-nutrition-companion.auth0",
+    "scheme": "rork-nutrition-companion",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -14,11 +14,15 @@
         "image": "./assets/images/DGlogo-Photoroom-modified.png",
         "backgroundColor": "#181c1f"
       },
-      "resizeMode": "contain",
+      "resizeMode": "cover",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cyrusdemon7.dg",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -29,9 +33,7 @@
         {
           "action": "VIEW",
           "data": {
-            "scheme": "app.rork.ai-powered-nutrition-companion.auth0",
-            "host": "dev-ikys77t6u5pzs053.us.auth0.com",
-            "pathPrefix": "/android/app.rork.ai-powered-nutrition-companion/callback"
+            "scheme": "rork-nutrition-companion"
           },
           "category": [
             "BROWSABLE",
@@ -39,11 +41,11 @@
           ]
         }
       ],
-      "package": "com.cyrusdemon7.expoapp"
+      "package": "com.cyrusdemon7.dg"
     },
     "web": {
       "bundler": "metro",
-      "output": "server",
+      "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -57,7 +59,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "bf328cf5-9aad-4720-ab51-e643fe23853d"
+        "projectId": "75b41f90-f8cd-438b-8b5d-9662c2fd7173"
       }
     }
   }

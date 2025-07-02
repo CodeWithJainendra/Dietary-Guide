@@ -1,0 +1,551 @@
+// app/onboarding.tsx
+// Complete onboarding experience with questionnaire and authentication options
+
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@clerk/clerk-expo';
+import Input from '@/components/Input';
+import Button from '@/components/Button';
+import Card from '@/components/Card';
+import {
+  ArrowLeft,
+  ArrowRight,
+  User,
+  Mail,
+  Target,
+  Activity,
+  Heart,
+  Utensils,
+  Globe
+} from 'lucide-react-native';
+
+export default function OnboardingScreen() {
+  const { colors } = useTheme();
+  const router = useRouter();
+  const { isSignedIn } = useAuth();
+
+  // Questionnaire state
+  const [step, setStep] = useState(0);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [height, setHeight] = useState('');
+  const [weight, setWeight] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
+  const [goal, setGoal] = useState('');
+  const [exerciseDuration, setExerciseDuration] = useState('');
+  const [isSmoker, setIsSmoker] = useState(false);
+  const [diseases, setDiseases] = useState('');
+  const [dietaryPreferences, setDietaryPreferences] = useState('');
+
+  // If already signed in, redirect
+  React.useEffect(() => {
+    if (isSignedIn) {
+      router.replace('/(tabs)/index');
+    }
+  }, [isSignedIn]);
+
+  const handleNext = () => {
+    if (step === 0) {
+      // Validate basic info
+      if (!name.trim() || !email.trim()) {
+        Alert.alert('Error', 'Please fill in your name and email.');
+        return;
+      }
+      if (!height || !weight || !age) {
+        Alert.alert('Error', 'Please fill in all your basic information.');
+        return;
+      }
+    }
+    
+    if (step < 3) {
+      setStep(step + 1);
+    } else {
+      // On the last step, show authentication options
+      setStep(4); // Authentication step
+    }
+  };
+
+  const handleBack = () => {
+    if (step > 0) {
+      setStep(step - 1);
+    } else {
+      router.back();
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    // TODO: Implement Google OAuth with Clerk
+    Alert.alert('Coming Soon', 'Google sign-in will be available soon!');
+  };
+
+  const handleEmailSignUp = () => {
+    // Navigate to email signup with all the collected onboarding data
+    const params = new URLSearchParams({
+      name: name,
+      email: email,
+      height: height,
+      weight: weight,
+      age: age,
+      gender: gender,
+      goal: goal,
+      exerciseDuration: exerciseDuration,
+      isSmoker: isSmoker.toString(),
+      diseases: diseases,
+      dietaryPreferences: dietaryPreferences,
+    });
+    router.push(`/signup?${params.toString()}`);
+  };
+
+  const renderStep = () => {
+    switch (step) {
+      case 0:
+        return (
+          <View style={styles.stepContent}>
+            <Text style={[styles.stepTitle, { color: colors.text }]}>👋 Let's get to know you</Text>
+            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+              Tell us about yourself to get personalized recommendations
+            </Text>
+
+            <Input
+              label="Full Name"
+              value={name}
+              onChangeText={setName}
+              placeholder="Enter your full name"
+              leftIcon={<User size={20} color={colors.textSecondary} />}
+            />
+
+            <Input
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Enter your email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              leftIcon={<Mail size={20} color={colors.textSecondary} />}
+            />
+
+            <View style={styles.row}>
+              <Input
+                label="Height (cm)"
+                value={height}
+                onChangeText={setHeight}
+                placeholder="170"
+                keyboardType="numeric"
+                style={styles.halfInput}
+              />
+              <Input
+                label="Weight (kg)"
+                value={weight}
+                onChangeText={setWeight}
+                placeholder="70"
+                keyboardType="numeric"
+                style={styles.halfInput}
+              />
+            </View>
+
+            <View style={styles.row}>
+              <Input
+                label="Age"
+                value={age}
+                onChangeText={setAge}
+                placeholder="25"
+                keyboardType="numeric"
+                style={styles.halfInput}
+              />
+              <View style={styles.halfInput}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Gender</Text>
+                <View style={styles.genderContainer}>
+                  {['Male', 'Female', 'Other'].map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.genderOption,
+                        { 
+                          backgroundColor: gender === option ? colors.primary : colors.card,
+                          borderColor: colors.border 
+                        }
+                      ]}
+                      onPress={() => setGender(option)}
+                    >
+                      <Text style={[
+                        styles.genderText,
+                        { color: gender === option ? 'white' : colors.text }
+                      ]}>
+                        {option}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </View>
+        );
+
+      case 1:
+        return (
+          <View style={styles.stepContent}>
+            <Text style={[styles.stepTitle, { color: colors.text }]}>🎯 What's your goal?</Text>
+            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+              Choose your primary health objective
+            </Text>
+
+            <View style={styles.optionsContainer}>
+              {[
+                { key: 'weight_loss', label: 'Weight Loss', icon: '⬇️' },
+                { key: 'weight_gain', label: 'Weight Gain', icon: '⬆️' },
+                { key: 'maintenance', label: 'Maintain Weight', icon: '⚖️' },
+                { key: 'healthy_lifestyle', label: 'Healthy Lifestyle', icon: '🌟' },
+              ].map((option) => (
+                <TouchableOpacity
+                  key={option.key}
+                  style={[
+                    styles.optionCard,
+                    { 
+                      backgroundColor: goal === option.key ? colors.primary : colors.card,
+                      borderColor: colors.border 
+                    }
+                  ]}
+                  onPress={() => setGoal(option.key)}
+                >
+                  <Text style={styles.optionIcon}>{option.icon}</Text>
+                  <Text style={[
+                    styles.optionText,
+                    { color: goal === option.key ? 'white' : colors.text }
+                  ]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        );
+
+      case 2:
+        return (
+          <View style={styles.stepContent}>
+            <Text style={[styles.stepTitle, { color: colors.text }]}>💪 Activity & Lifestyle</Text>
+            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+              Tell us about your exercise habits and lifestyle
+            </Text>
+
+            <Input
+              label="Exercise Duration (minutes/day)"
+              value={exerciseDuration}
+              onChangeText={setExerciseDuration}
+              placeholder="30"
+              keyboardType="numeric"
+              leftIcon={<Activity size={20} color={colors.textSecondary} />}
+            />
+
+            <View style={styles.smokerContainer}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Do you smoke?</Text>
+              <View style={styles.smokerOptions}>
+                {[
+                  { key: false, label: 'No' },
+                  { key: true, label: 'Yes' },
+                ].map((option) => (
+                  <TouchableOpacity
+                    key={option.label}
+                    style={[
+                      styles.smokerOption,
+                      { 
+                        backgroundColor: isSmoker === option.key ? colors.primary : colors.card,
+                        borderColor: colors.border 
+                      }
+                    ]}
+                    onPress={() => setIsSmoker(option.key)}
+                  >
+                    <Text style={[
+                      styles.smokerText,
+                      { color: isSmoker === option.key ? 'white' : colors.text }
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        );
+
+      case 3:
+        return (
+          <View style={styles.stepContent}>
+            <Text style={[styles.stepTitle, { color: colors.text }]}>🍽️ Dietary Preferences</Text>
+            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+              Any dietary restrictions or health conditions?
+            </Text>
+
+            <Input
+              label="Health Conditions"
+              value={diseases}
+              onChangeText={setDiseases}
+              placeholder="e.g., diabetes, hypertension (optional)"
+              multiline
+              leftIcon={<Heart size={20} color={colors.textSecondary} />}
+            />
+
+            <Input
+              label="Dietary Preferences"
+              value={dietaryPreferences}
+              onChangeText={setDietaryPreferences}
+              placeholder="e.g., vegetarian, vegan, gluten-free (optional)"
+              multiline
+              leftIcon={<Utensils size={20} color={colors.textSecondary} />}
+            />
+          </View>
+        );
+
+      case 4:
+        return (
+          <View style={styles.stepContent}>
+            <Text style={[styles.stepTitle, { color: colors.text }]}>🎉 Ready to Start!</Text>
+            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+              Your personalized AI nutrition companion is ready. Choose how you'd like to sign up:
+            </Text>
+
+            <Card style={styles.authCard}>
+              <Button
+                title="Continue with Google"
+                onPress={handleGoogleSignIn}
+                leftIcon={<Globe size={18} color="white" />}
+                style={{...styles.authButton, backgroundColor: '#4285F4'}}
+              />
+
+              <View style={styles.divider}>
+                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                <Text style={[styles.dividerText, { color: colors.textSecondary }]}>or</Text>
+                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+              </View>
+
+              <Button
+                title="Continue with Email"
+                onPress={handleEmailSignUp}
+                leftIcon={<Mail size={18} color="white" />}
+                style={{...styles.authButton, backgroundColor: colors.primary}}
+              />
+            </Card>
+
+            <TouchableOpacity
+              onPress={() => router.push('/signin')}
+              style={styles.signInLink}
+            >
+              <Text style={[styles.signInText, { color: colors.textSecondary }]}>
+                Already have an account?{' '}
+                <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                  Sign in here
+                </Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <ArrowLeft size={24} color={colors.text} />
+          </TouchableOpacity>
+          
+          <View style={styles.progressContainer}>
+            <Text style={[styles.progressText, { color: colors.textSecondary }]}>
+              {step + 1} of 5
+            </Text>
+            <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
+              <View 
+                style={[
+                  styles.progressFill, 
+                  { 
+                    backgroundColor: colors.primary,
+                    width: `${((step + 1) / 5) * 100}%`
+                  }
+                ]} 
+              />
+            </View>
+          </View>
+        </View>
+
+        {renderStep()}
+
+        {step < 4 && (
+          <Button
+            title="Continue"
+            onPress={handleNext}
+            rightIcon={<ArrowRight size={18} color="white" />}
+            style={styles.continueButton}
+          />
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 32,
+    marginTop: 20,
+  },
+  backButton: {
+    marginRight: 16,
+    padding: 8,
+  },
+  progressContainer: {
+    flex: 1,
+  },
+  progressText: {
+    fontSize: 14,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  progressBar: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  stepContent: {
+    flex: 1,
+    gap: 20,
+  },
+  stepTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  stepSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  genderContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  genderOption: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  genderText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  optionsContainer: {
+    gap: 12,
+  },
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  optionIcon: {
+    fontSize: 24,
+    marginRight: 16,
+  },
+  optionText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  smokerContainer: {
+    gap: 12,
+  },
+  smokerOptions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  smokerOption: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  smokerText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  authCard: {
+    padding: 24,
+    gap: 16,
+  },
+  authButton: {
+    marginBottom: 8,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+  },
+  signInLink: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  signInText: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  continueButton: {
+    marginTop: 32,
+  },
+});

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, Alert, Platform, KeyboardAvoidingView, Linking } from 'react-native';
 import { router } from 'expo-router';
+import { useAuth } from '@clerk/clerk-expo';
 import { useUserStore } from '@/store/userStore';
 import { useTheme } from '@/contexts/ThemeContext';
 import Card from '@/components/Card';
@@ -13,16 +14,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Modal from 'react-native-modal';
 import TextInput from 'react-native/Libraries/Components/TextInput/TextInput';
 import * as SecureStore from 'expo-secure-store';
-import LottieView from 'lottie-react-native';
 
 export default function IndexScreen() {
   const { colors } = useTheme();
-  const isUserAuthenticated = useUserStore((state) => state.isAuthenticated);
+  const { isSignedIn, isLoaded } = useAuth();
   const isUserOnboarded = useUserStore((state) => state.isOnboarded);
   const profile = useUserStore((state) => state.profile);
   const updateProfile = useUserStore((state) => state.updateProfile);
   const setOnboarded = useUserStore((state) => state.setOnboarded);
-  const setAuthenticated = useUserStore((state) => state.setAuthenticated);
   
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(0);
@@ -54,46 +53,52 @@ export default function IndexScreen() {
       try {
         console.log('Checking auth status in index...');
 
-        // If user is authenticated and onboarded, navigate to main app
-        if (isUserAuthenticated && isUserOnboarded) {
+        // Wait for Clerk to load
+        if (!isLoaded) {
+          console.log('Clerk not loaded yet, waiting...');
+          return;
+        }
+
+        // If user is authenticated with Clerk and onboarded, navigate to main app
+        if (isSignedIn && isUserOnboarded && profile) {
           console.log('User is authenticated and onboarded, navigating to main app');
-          router.replace('/(tabs)');
+          router.replace('/(tabs)/index');
           return;
         }
 
-        // If user is authenticated but not onboarded, show onboarding
-        if (isUserAuthenticated && !isUserOnboarded) {
-          console.log('User is authenticated but not onboarded, showing onboarding');
-          setLoading(false);
+        // If user is authenticated but not onboarded, check if they're in verification process
+        if (isSignedIn && !isUserOnboarded) {
+          // Check if user is in the middle of email verification
+          const pendingVerification = await AsyncStorage.getItem('pendingEmailVerification');
+          if (pendingVerification === 'true') {
+            console.log('User is in email verification process, not redirecting');
+            return;
+          }
+
+          console.log('User authenticated but not onboarded, redirecting to onboarding');
+          router.replace('/onboarding');
           return;
         }
 
-        // If not authenticated, check for credentials in SecureStore
-        const storedEmail = await SecureStore.getItemAsync('user_email');
-        const storedPassword = await SecureStore.getItemAsync('user_password');
-        if (storedEmail && storedPassword) {
-          // Credentials exist, route to splash for biometric/password auth
-          console.log('Credentials found in SecureStore, routing to splash');
-          router.replace('/splash');
+        // If no authentication, redirect to sign-in page
+        if (!isSignedIn) {
+          console.log('No authentication found, redirecting to sign-in');
+          router.replace('/signin');
           return;
         }
-
-        // If no credentials, show onboarding
-        console.log('No credentials found, showing onboarding');
-        setLoading(false);
       } catch (error) {
         console.error('Error checking auth status:', error);
-        // Show the questionnaire as fallback
-        setLoading(false);
+        // Redirect to sign-in as fallback
+        router.replace('/signin');
       }
     };
     
     const timer = setTimeout(() => {
       checkAuthStatus();
-    }, 1500); // Give more time for stores to initialize
-    
+    }, 1000); // Give time for Clerk to initialize
+
     return () => clearTimeout(timer);
-  }, [isUserAuthenticated, isUserOnboarded, setAuthenticated, updateProfile]);
+  }, [isLoaded, isSignedIn, isUserOnboarded, profile]);
   
   const handleNext = () => {
     if (step === 0) {
@@ -151,7 +156,7 @@ export default function IndexScreen() {
       }
     }
     setOnboarded(true);
-    router.replace('/(tabs)');
+    router.replace('/(tabs)/index');
   };
   
   const handleBack = () => {
@@ -519,12 +524,10 @@ export default function IndexScreen() {
                 <View style={[styles.modalView, { backgroundColor: colors.card }]}> 
                   {showConfirmation ? (
                     <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                      <LottieView
-                        source={require('../assets/confirmation.json')}
-                        autoPlay
-                        loop={false}
-                        style={{ width: 140, height: 140 }}
-                      />
+                      {/* Custom confirmation icon instead of Lottie animation */}
+                      <View style={styles.confirmationIconContainer}>
+                        <Text style={styles.confirmationIcon}>✔️</Text>
+                      </View>
                       <Text style={[styles.success, { fontSize: 18, marginTop: 16, marginBottom: 8 }]}>Check your email to confirm sign-up!</Text>
                       <TouchableOpacity
                         style={[styles.button, { backgroundColor: colors.primary, marginTop: 12 }]}
@@ -849,5 +852,18 @@ const styles = StyleSheet.create({
   fullWidthButton: {
     flex: 1,
     marginLeft: 0,
+  },
+  confirmationIconContainer: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#E6F9EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  confirmationIcon: {
+    fontSize: 80,
+    color: '#34C759',
   },
 });

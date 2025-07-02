@@ -7,6 +7,9 @@ import { router } from 'expo-router';
 import Modal from 'react-native-modal';
 import { useUserStore } from '@/store/userStore';
 
+// Remove the custom Version key from app.json and use expo.version for version display
+import appConfig from '../app.json';
+
 export default function SplashScreen() {
   const [loading, setLoading] = useState(true);
   const [biometricError, setBiometricError] = useState('');
@@ -174,7 +177,10 @@ export default function SplashScreen() {
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color="#4A90E2" />
-      <Text style={styles.splashText}>Loading...</Text>
+      {/* Version at parent bottom using expo.version */}
+      <View style={styles.versionContainer}>
+        <Text style={styles.versionText}>{appConfig.expo?.version || '1.0.0'}</Text>
+      </View>
       {biometricError ? <Text style={styles.error}>{biometricError}</Text> : null}
       <Modal isVisible={showNotVerified} backdropOpacity={0.7} backdropColor="#000">
         <View style={styles.popup}>
@@ -221,11 +227,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F7F8FA',
   },
-  splashText: {
-    marginTop: 16,
-    fontSize: 18,
+  versionContainer: {
+    position: 'absolute',
+    bottom: 32,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  versionText: {
     color: '#4A90E2',
     fontWeight: 'bold',
+    fontSize: 16,
   },
   error: {
     color: '#FF3B30',

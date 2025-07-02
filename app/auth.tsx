@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Image, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
-import { router } from 'expo-router';
+import { router, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/contexts/ThemeContext';
 import { loginWithAuth0 } from '@/lib/auth0';
@@ -12,6 +12,7 @@ import { Lock, User } from 'lucide-react-native';
 
 export default function AuthScreen() {
   const { colors } = useTheme();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [modalVisible, setModalVisible] = useState(true);
@@ -62,7 +63,7 @@ export default function AuthScreen() {
         
         // Navigate to main app
         console.log('Navigating to main app after successful login');
-        router.replace('/(tabs)');
+        router.replace('/(tabs)/index');
       } else {
         console.log('Auth0 login failed:', result.error);
         
@@ -125,7 +126,7 @@ export default function AuthScreen() {
     setAuthenticated(true);
     
     // Navigate to main app
-    router.replace('/(tabs)');
+    router.replace('/(tabs)/index');
   };
   
   const handleSkipAuth = () => {
@@ -175,7 +176,35 @@ export default function AuthScreen() {
             loading={loading}
             style={styles.authButton}
           />
-          
+
+          <View style={styles.divider}>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.dividerText, { color: colors.textSecondary }]}>or</Text>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          </View>
+
+          <TouchableOpacity
+            onPress={() => router.push('/signin')}
+            style={[styles.clerkButton, { borderColor: colors.border }]}
+          >
+            <User size={18} color={colors.primary} />
+            <Text style={[styles.clerkButtonText, { color: colors.primary }]}>
+              Sign in with Email
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push('/clerk-auth')}
+            style={styles.signUpLink}
+          >
+            <Text style={[styles.signUpText, { color: colors.textSecondary }]}>
+              Don't have an account?{' '}
+              <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                Sign up here
+              </Text>
+            </Text>
+          </TouchableOpacity>
+
           {(Platform.OS === 'web' || __DEV__) && (
             <TouchableOpacity onPress={handleSkipAuth} style={styles.skipButton}>
               <Text style={[styles.skipText, { color: colors.textSecondary }]}>
@@ -358,6 +387,43 @@ const styles = StyleSheet.create({
   success: {
     color: '#27ae60',
     marginBottom: 8,
+    textAlign: 'center',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+  },
+  clerkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: 'transparent',
+  },
+  clerkButtonText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  signUpLink: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  signUpText: {
+    fontSize: 14,
     textAlign: 'center',
   },
 });

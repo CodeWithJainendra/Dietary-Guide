@@ -7,6 +7,11 @@ import { useUserStore } from '@/store/userStore';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
+import { ClerkProvider } from '@clerk/clerk-expo';
+import { publishableKey, tokenCache } from '@/lib/clerk';
+import { ClerkSupabaseProvider } from '@/components/ClerkSupabaseProvider';
+import appConfig from '../app.json';
+
 const logoLight = require('../assets/images/logo-light.png');
 const logoDark = require('../assets/images/logo-dark.png');
 
@@ -105,7 +110,9 @@ function RootLayoutContent() {
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <Image source={appLogo} style={{ width: 120, height: 120, marginBottom: 24 }} resizeMode="contain" />
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 16, color: colors.text }}>Loading...</Text>
+        <View style={{ position: 'absolute', bottom: 32, left: 0, right: 0, alignItems: 'center' }}>
+          <Text style={{ color: colors.text, fontWeight: 'bold' }}>{appConfig.Version || appConfig.expo?.version || 'v1.0.0'}</Text>
+        </View>
       </View>
     );
   }
@@ -113,21 +120,22 @@ function RootLayoutContent() {
   return (
     <SafeAreaProvider>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: colors.card,
-          },
-          headerTintColor: colors.text,
-          headerTitleStyle: {
-            fontWeight: '600',
-          },
-          headerShadowVisible: false,
-          contentStyle: {
-            backgroundColor: colors.background,
-          },
-        }}
-      >
+      <ClerkSupabaseProvider>
+        <Stack
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: colors.card,
+            },
+            headerTintColor: colors.text,
+            headerTitleStyle: {
+              fontWeight: '600',
+            },
+            headerShadowVisible: false,
+            contentStyle: {
+              backgroundColor: colors.background,
+            },
+          }}
+        >
         <Stack.Screen
           name="index"
           options={{
@@ -138,6 +146,34 @@ function RootLayoutContent() {
           name="auth"
           options={{
             title: 'Sign In',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="signin"
+          options={{
+            title: 'Sign In',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="clerk-auth"
+          options={{
+            title: 'Authentication',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="onboarding"
+          options={{
+            title: 'Get Started',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="signup"
+          options={{
+            title: 'Sign Up',
             headerShown: false,
           }}
         />
@@ -185,6 +221,12 @@ function RootLayoutContent() {
           }}
         />
         <Stack.Screen
+          name="test-integration"
+          options={{
+            title: 'Integration Test',
+          }}
+        />
+        <Stack.Screen
           name="meal/[id]"
           options={{
             title: 'Meal Details',
@@ -198,6 +240,7 @@ function RootLayoutContent() {
         />
         <Stack.Screen name="+not-found" />
       </Stack>
+      </ClerkSupabaseProvider>
     </SafeAreaProvider>
   );
 }
@@ -238,9 +281,11 @@ export default function RootLayout() {
   
   // Conditionally wrap with tRPC provider if available
   const content = (
-    <ThemeProvider>
-      <RootLayoutContent />
-    </ThemeProvider>
+    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+      <ThemeProvider>
+        <RootLayoutContent />
+      </ThemeProvider>
+    </ClerkProvider>
   );
 
   if (trpc && trpcClient) {

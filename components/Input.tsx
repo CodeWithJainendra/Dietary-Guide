@@ -17,6 +17,8 @@ interface InputProps extends TextInputProps {
   labelStyle?: TextStyle;
   inputStyle?: ViewStyle;
   errorStyle?: TextStyle;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
 }
 
 const Input: React.FC<InputProps> = ({
@@ -26,6 +28,8 @@ const Input: React.FC<InputProps> = ({
   labelStyle,
   inputStyle,
   errorStyle,
+  leftIcon,
+  rightIcon,
   ...props
 }) => {
   const { colors } = useTheme();
@@ -42,19 +46,40 @@ const Input: React.FC<InputProps> = ({
         </Text>
       )}
       
-      <TextInput
-        style={[
-          styles.input,
-          { 
-            backgroundColor: colors.card,
-            color: colors.text,
-            borderColor: error ? colors.error : colors.border,
-          },
-          inputStyle
-        ]}
-        placeholderTextColor={colors.textSecondary}
-        {...props}
-      />
+      <View style={[
+        styles.inputContainer,
+        {
+          backgroundColor: colors.card,
+          borderColor: error ? colors.error : colors.border,
+        }
+      ]}>
+        {leftIcon && (
+          <View style={styles.leftIconContainer}>
+            {leftIcon}
+          </View>
+        )}
+
+        <TextInput
+          style={[
+            styles.input,
+            {
+              color: colors.text,
+              flex: 1,
+            },
+            leftIcon && styles.inputWithLeftIcon,
+            rightIcon && styles.inputWithRightIcon,
+            inputStyle
+          ]}
+          placeholderTextColor={colors.textSecondary}
+          {...props}
+        />
+
+        {rightIcon && (
+          <View style={styles.rightIconContainer}>
+            {rightIcon}
+          </View>
+        )}
+      </View>
       
       {error && (
         <Text style={[

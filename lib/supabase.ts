@@ -1,11 +1,12 @@
 import { UserProfile } from '@/types';
 import { createClient } from '@supabase/supabase-js';
 
-// Real Supabase client using provided project URL and anon key
-export const supabase = createClient(
-  'https://tozbstequzpevxvxnkev.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvemJzdGVxdXpwZXZ4dnhua2V2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA4NDc5NTcsImV4cCI6MjA1NjQyMzk1N30.XpmX6KbD3SeQV_04y7Mx1eqHsLaKKVD3oTru-nnEDdo'
-);
+// Get Supabase configuration from environment variables
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://tozbstequzpevxvxnkev.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvemJzdGVxdXpwZXZ4dnhua2V2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA4NDc5NTcsImV4cCI6MjA1NjQyMzk1N30.XpmX6KbD3SeQV_04y7Mx1eqHsLaKKVD3oTru-nnEDdo';
+
+// Create Supabase client
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // NOTE: Ensure 'userId' is unique or primary key in the Supabase 'profiles' table for true upsert safety.
 export async function saveUserProfile(profile: UserProfile): Promise<{ success: boolean; error?: string }> {
@@ -13,10 +14,16 @@ export async function saveUserProfile(profile: UserProfile): Promise<{ success: 
     if (!profile.userId) {
       throw new Error('User ID is required to save profile');
     }
+
+    // Create a clean profile object without the id field for insertion
+    const { id, ...profileData } = profile;
+
+    console.log('Saving profile data to Supabase:', profileData);
+
     // Use upsert to ensure only one profile per userId
     const { error } = await supabase
       .from('profiles')
-      .upsert([{ ...profile }], { onConflict: 'userId' });
+      .upsert([profileData], { onConflict: 'userId' });
     if (error) {
       throw error;
     }
