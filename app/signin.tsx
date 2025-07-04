@@ -20,6 +20,7 @@ import { useGoogleOAuth } from '@/lib/clerk';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import { Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react-native';
+import GoogleIcon from '@/components/GoogleIcon';
 import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -363,9 +364,7 @@ export default function SignInScreen() {
                 style={styles.googleButton}
                 disabled={loading}
               >
-                <View style={styles.googleIcon}>
-                  <Text style={styles.googleIconText}>G</Text>
-                </View>
+                <GoogleIcon size={20} style={styles.googleIcon} />
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
                 {loading && <ActivityIndicator size="small" color="#55B685" />}
               </TouchableOpacity>
@@ -530,7 +529,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     height: 52,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -541,18 +540,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   googleIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#55B685',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginRight: 12,
-  },
-  googleIconText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
   googleButtonText: {
     fontSize: 16,

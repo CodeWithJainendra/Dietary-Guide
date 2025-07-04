@@ -20,6 +20,7 @@ import { useUserStore } from '@/store/userStore';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
+import GoogleIcon from '@/components/GoogleIcon';
 import {
   ArrowLeft,
   ArrowRight,
@@ -28,8 +29,7 @@ import {
   Target,
   Activity,
   Heart,
-  Utensils,
-  Globe
+  Utensils
 } from 'lucide-react-native';
 import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 
@@ -477,7 +477,7 @@ export default function OnboardingScreen() {
                   <Button
                     title={isGoogleLoading ? "Signing in..." : "Continue with Google"}
                     onPress={handleGoogleSignIn}
-                    leftIcon={!isGoogleLoading ? <Globe size={18} color="white" /> : undefined}
+                    leftIcon={!isGoogleLoading ? <GoogleIcon size={18} /> : undefined}
                     style={{...styles.authButton, backgroundColor: '#55B685'}}
                     disabled={isGoogleLoading}
                     loading={isGoogleLoading}

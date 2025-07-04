@@ -23,8 +23,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
-import { Mail, Lock, Eye, EyeOff, ArrowLeft, UserPlus, Globe } from 'lucide-react-native';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, UserPlus } from 'lucide-react-native';
 import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
+import GoogleIcon from '@/components/GoogleIcon';
 
 export default function SignUpScreen() {
   const { colors } = useTheme();
@@ -456,7 +457,7 @@ export default function SignUpScreen() {
           <Button
             title="Continue with Google"
             onPress={handleGoogleSignIn}
-            leftIcon={<Globe size={18} color="white" />}
+            leftIcon={<GoogleIcon size={18} />}
             style={[styles.button, { backgroundColor: '#55B685' }]}
           />
 

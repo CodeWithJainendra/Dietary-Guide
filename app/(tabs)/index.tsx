@@ -25,7 +25,7 @@ import LogMealForm from '@/components/LogMealForm';
 import MealCard from '@/components/MealCard';
 import AvatarEmoji from '@/components/AvatarEmoji';
 import { MealEntry } from '@/types';
-import { getPersonalizedGreeting, getMotivationalMessage } from '@/utils/aiService';
+import { getPersonalizedGreeting, getMotivationalMessage, testOpenRouterConnection, testOpenRouterWithKey, getAIServiceStatus } from '@/utils/aiService';
 import { Plus, TrendingUp, Calendar, Utensils, Award } from 'lucide-react-native';
 import AuthStatus from '@/components/AuthStatus';
 import AIRecommendations from '@/components/AIRecommendations';
@@ -521,6 +521,42 @@ export default function HomeScreen() {
           >
             <Calendar size={20} color="white" />
             <Text style={styles.actionButtonText}>Plan Meals</Text>
+          </TouchableOpacity>
+
+          {/* Temporary AI Test Button */}
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#FF6B6B' }]}
+            onPress={async () => {
+              console.log('🧪 Testing AI Service...');
+              const status = getAIServiceStatus();
+              console.log('📊 AI Status:', status);
+
+              // Test with environment variable first
+              const envResult = await testOpenRouterConnection();
+
+              // If env test fails, try manual test with hardcoded key
+              if (!envResult) {
+                console.log('🔄 Environment test failed, trying manual test...');
+                const manualKey = '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';
+                const manualResult = await testOpenRouterWithKey(manualKey);
+
+                Alert.alert(
+                  'AI Service Test',
+                  manualResult
+                    ? '✅ Manual test worked! Check environment variables.'
+                    : '❌ Both tests failed - check API key validity',
+                  [{ text: 'OK' }]
+                );
+              } else {
+                Alert.alert(
+                  'AI Service Test',
+                  '✅ OpenRouter working perfectly!',
+                  [{ text: 'OK' }]
+                );
+              }
+            }}
+          >
+            <Text style={styles.actionButtonText}>🧪 Test AI</Text>
           </TouchableOpacity>
         </View>
         
