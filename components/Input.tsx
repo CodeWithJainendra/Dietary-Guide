@@ -112,21 +112,55 @@ Input.displayName = 'Input';
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 0,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: '600',
     marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 12,
+    minHeight: 56,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   input: {
-    height: 48,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
+    fontSize: 16,
+    paddingVertical: 16,
+    fontWeight: '400',
+  },
+  inputWithLeftIcon: {
+    paddingLeft: 8,
+  },
+  inputWithRightIcon: {
+    paddingRight: 8,
+  },
+  leftIconContainer: {
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rightIconContainer: {
+    marginLeft: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   error: {
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 12,
+    marginTop: 6,
+    fontWeight: '500',
   },
 });
 

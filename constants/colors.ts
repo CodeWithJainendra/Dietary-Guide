@@ -1,6 +1,6 @@
 // Color palette for the app
 export const colors = {
-  primary: "#4A90E2", // Blue for primary actions
+  primary: "#55B685", // Green for primary actions
   secondary: "#F5A623", // Amber for secondary elements
   background: "#F9FAFB", // Light background
   card: "#FFFFFF", // White card background

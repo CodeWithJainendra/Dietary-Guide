@@ -21,8 +21,8 @@ interface ButtonProps {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   icon?: React.ReactNode; // Added icon prop for backward compatibility
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: ViewStyle | ViewStyle[];
+  textStyle?: TextStyle | TextStyle[];
 }
 
 const Button: React.FC<ButtonProps> = ({

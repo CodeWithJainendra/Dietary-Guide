@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, Alert, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, Alert, Platform, Linking, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@clerk/clerk-expo';
 import { useUserStore } from '@/store/userStore';
@@ -13,7 +13,6 @@ import { saveUserProfile, supabase } from '@/lib/supabase';
 import { navigationHelpers, ROUTES } from '@/utils/navigation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Modal from 'react-native-modal';
-import TextInput from 'react-native/Libraries/Components/TextInput/TextInput';
 import * as SecureStore from 'expo-secure-store';
 import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 
@@ -76,9 +75,10 @@ export default function IndexScreen() {
       }
     };
 
+    // Reduced delay to make navigation faster
     const timer = setTimeout(() => {
       handleAuthAndRouting();
-    }, 1000); // Give time for Clerk to initialize
+    }, 500); // Reduced from 1000ms to 500ms
 
     return () => clearTimeout(timer);
   }, [isLoaded, isSignedIn, isUserOnboarded, profile]);
@@ -100,7 +100,7 @@ export default function IndexScreen() {
       setStep(step + 1);
     } else {
       // On the last step, if not authenticated, navigate to auth screen
-      if (!isUserAuthenticated) {
+      if (!isSignedIn) {
         router.replace('/auth');
       } else {
         // If already authenticated, complete onboarding
@@ -358,9 +358,10 @@ export default function IndexScreen() {
                     onChangeText={setAge}
                     keyboardType="numeric"
                     placeholder="30"
+                    containerStyle={styles.ageInputContainer}
                   />
                 </View>
-                
+
                 <View style={styles.halfInput}>
                   <View style={styles.pickerContainer}>
                     <Text style={[styles.pickerLabel, { color: colors.text }]}>Gender</Text>
@@ -652,6 +653,9 @@ const styles = StyleSheet.create({
   },
   halfInput: {
     width: '48%',
+  },
+  ageInputContainer: {
+    marginBottom: 16,
   },
   pickerContainer: {
     marginBottom: 16,

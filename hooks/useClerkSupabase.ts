@@ -48,8 +48,31 @@ export function useClerkSupabase() {
           setOnboarded(true);
         } else {
           // User doesn't exist in Supabase yet
-          console.log('User profile not found in Supabase - will be created after onboarding');
-          // Don't create a profile here - let the signup process handle it
+          console.log('No profile found for userId:', user.id);
+
+          // For Google OAuth users, create a basic profile immediately
+          // This handles cases where the OAuth flow didn't create the profile
+          console.log('Creating basic profile for authenticated user...');
+
+          try {
+            const basicProfile = await syncClerkUserToSupabase(user, {
+              name: user.fullName || user.firstName || 'User',
+              email: user.primaryEmailAddress?.emailAddress || '',
+              photoUrl: user.imageUrl || undefined,
+            });
+
+            if (basicProfile.success && basicProfile.profile) {
+              console.log('Basic profile created successfully');
+              setProfile(basicProfile.profile);
+              setOnboarded(true);
+            } else {
+              console.error('Failed to create basic profile:', basicProfile.error);
+              console.log('User will need to complete onboarding');
+            }
+          } catch (error) {
+            console.error('Error creating basic profile:', error);
+            console.log('User will need to complete onboarding');
+          }
         }
       } catch (error) {
         console.error('Error initializing user:', error);

@@ -1,7 +1,7 @@
 // app/onboarding.tsx
 // Complete onboarding experience with questionnaire and authentication options
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useGoogleOAuth } from '@/lib/clerk';
 import { saveUserProfile } from '@/lib/supabase';
 import { useUserStore } from '@/store/userStore';
@@ -37,8 +37,9 @@ export default function OnboardingScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { isSignedIn } = useAuth();
+  const { user } = useUser();
   const { signInWithGoogle } = useGoogleOAuth();
-  const { setProfile, setAuthenticated, setOnboarded } = useUserStore();
+  const { profile, setProfile, setAuthenticated, setOnboarded } = useUserStore();
 
   // Questionnaire state
   const [step, setStep] = useState(0);
@@ -58,12 +59,31 @@ export default function OnboardingScreen() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // If already signed in, redirect
-  React.useEffect(() => {
-    if (isSignedIn) {
-      router.replace('/(tabs)');
+  // Initialize form with existing profile data if available
+  useEffect(() => {
+    if (profile) {
+      console.log('Initializing onboarding form with existing profile data:', profile);
+      setName(profile.name || '');
+      setEmail(profile.email || '');
+      setHeight(profile.height?.toString() || '');
+      setWeight(profile.weight?.toString() || '');
+      setAge(profile.age?.toString() || '');
+      setGender(profile.gender || '');
+      setGoal(profile.goal || '');
+      setExerciseDuration(profile.exerciseDuration?.toString() || '');
+      setIsSmoker(profile.isSmoker || false);
+      setDiseases(profile.diseases?.join(', ') || '');
+      setDietaryPreferences(profile.dietaryPreferences?.join(', ') || '');
+    } else if (user) {
+      // If no profile but user exists, initialize with user data
+      console.log('Initializing onboarding form with user data:', user);
+      setName(user.fullName || user.firstName || '');
+      setEmail(user.primaryEmailAddress?.emailAddress || '');
     }
-  }, [isSignedIn]);
+  }, [profile, user]);
+
+  // Don't redirect if already signed in - let them complete onboarding
+  // This prevents the redirect loop issue
 
   const handleNext = () => {
     if (step === 0) {
@@ -108,9 +128,10 @@ export default function OnboardingScreen() {
         setAuthenticated(true);
 
         if (result.isNewUser) {
-          // New user - continue with onboarding questionnaire
+          // New user - they need to complete the questionnaire
           console.log('New user detected, continuing with onboarding...');
-          setStep(1); // Move to first questionnaire step
+          // Move to step 4 (authentication step) to show completion button
+          setStep(4);
         } else {
           // Existing user - redirect to main app
           console.log('Existing user detected, redirecting to main app...');
@@ -160,11 +181,21 @@ export default function OnboardingScreen() {
       setIsSubmitting(true);
       console.log('Completing Google user onboarding...');
 
+      // Check if we have an authenticated user
+      if (!user) {
+        console.error('No authenticated user found');
+        Alert.alert('Error', 'No authenticated user found. Please try signing in again.');
+        return;
+      }
+
+      console.log('Current user ID:', user.id);
+      console.log('User email:', user.primaryEmailAddress?.emailAddress);
+
       // Create profile data from questionnaire
       const profileData = {
-        userId: '', // Will be set by the saveUserProfile function
-        name: name || 'User',
-        email: email || '',
+        userId: user.id, // Use the actual Clerk user ID
+        name: name || user.fullName || 'User',
+        email: email || user.primaryEmailAddress?.emailAddress || '',
         height: parseInt(height) || 170,
         weight: parseInt(weight) || 70,
         age: parseInt(age) || 25,
@@ -175,7 +206,7 @@ export default function OnboardingScreen() {
         diseases: diseases ? diseases.split(',').map(d => d.trim()).filter(Boolean) : [],
         dietaryPreferences: dietaryPreferences ? dietaryPreferences.split(',').map(p => p.trim()).filter(Boolean) : [],
         dietaryRestrictions: [],
-        photoUrl: undefined,
+        photoUrl: user.imageUrl || undefined,
       };
 
       console.log('Saving Google user profile:', profileData);
@@ -247,7 +278,7 @@ export default function OnboardingScreen() {
                 onChangeText={setHeight}
                 placeholder="170"
                 keyboardType="numeric"
-                style={styles.halfInput}
+                containerStyle={styles.halfInput}
               />
               <Input
                 label="Weight (kg)"
@@ -255,7 +286,7 @@ export default function OnboardingScreen() {
                 onChangeText={setWeight}
                 placeholder="70"
                 keyboardType="numeric"
-                style={styles.halfInput}
+                containerStyle={styles.halfInput}
               />
             </View>
 
@@ -266,9 +297,9 @@ export default function OnboardingScreen() {
                 onChangeText={setAge}
                 placeholder="25"
                 keyboardType="numeric"
-                style={styles.halfInput}
+                containerStyle={styles.ageInput}
               />
-              <View style={styles.halfInput}>
+              <View style={styles.genderSection}>
                 <Text style={[styles.inputLabel, { color: colors.text }]}>Gender</Text>
                 <View style={styles.genderContainer}>
                   {[
@@ -447,7 +478,7 @@ export default function OnboardingScreen() {
                     title={isGoogleLoading ? "Signing in..." : "Continue with Google"}
                     onPress={handleGoogleSignIn}
                     leftIcon={!isGoogleLoading ? <Globe size={18} color="white" /> : undefined}
-                    style={{...styles.authButton, backgroundColor: '#4285F4'}}
+                    style={{...styles.authButton, backgroundColor: '#55B685'}}
                     disabled={isGoogleLoading}
                     loading={isGoogleLoading}
                   />
@@ -586,6 +617,16 @@ const styles = StyleSheet.create({
   },
   halfInput: {
     flex: 1,
+    marginBottom: 16,
+  },
+  ageInput: {
+    width: '20%',
+    marginRight: 16,
+    marginBottom: 16,
+  },
+  genderSection: {
+    flex: 1,
+    marginBottom: 16,
   },
   inputLabel: {
     fontSize: 16,
@@ -594,7 +635,7 @@ const styles = StyleSheet.create({
   },
   genderContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 8
   },
   genderOption: {
     flex: 1,

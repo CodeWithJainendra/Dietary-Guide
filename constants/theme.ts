@@ -1,7 +1,7 @@
 // Theme configuration
 export const theme = {
   colors: {
-    primary: '#4A6FA5',
+    primary: '#55B685',
     secondary: '#6B98D4',
     background: '#F8F9FA',
     card: '#FFFFFF',
@@ -15,7 +15,7 @@ export const theme = {
     inactive: '#BDBDBD',
   },
   dark: {
-    primary: '#6B98D4',
+    primary: '#55B685',
     secondary: '#4A6FA5',
     background: '#121212',
     card: '#1E1E1E',

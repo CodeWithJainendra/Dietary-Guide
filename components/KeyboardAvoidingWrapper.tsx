@@ -10,8 +10,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface KeyboardAvoidingWrapperProps {
   children: React.ReactNode;
-  style?: ViewStyle;
-  contentContainerStyle?: ViewStyle;
+  style?: ViewStyle | ViewStyle[];
+  contentContainerStyle?: ViewStyle | ViewStyle[];
   enableScrollView?: boolean;
   keyboardVerticalOffset?: number;
   behavior?: 'height' | 'position' | 'padding';

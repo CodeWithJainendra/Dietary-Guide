@@ -210,6 +210,13 @@ function RootLayoutContent() {
           }}
         />
         <Stack.Screen
+          name="test-profile-save"
+          options={{
+            title: 'Profile Save Test',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
           name="auth-test"
           options={{
             title: 'Authentication Test',

@@ -59,7 +59,8 @@ export default function HomeScreen() {
   const screenWidth = Dimensions.get('window').width;
   const avatarRef = useRef(null);
 
-  // Authentication check
+  // Authentication check - only redirect if user is not signed in
+  // Don't redirect to onboarding from here to avoid loops
   useEffect(() => {
     if (!isLoaded) return;
 
@@ -69,12 +70,9 @@ export default function HomeScreen() {
       return;
     }
 
-    if (!isOnboarded || !profile) {
-      console.log('HomeScreen: User not onboarded, redirecting to onboarding');
-      router.replace('/onboarding');
-      return;
-    }
-  }, [isSignedIn, isLoaded, isOnboarded, profile]);
+    // Don't redirect to onboarding from tabs - let the main index handle this
+    // This prevents redirect loops during the onboarding process
+  }, [isSignedIn, isLoaded]);
 
   // Sync meal entries with Supabase when user is authenticated
   useEffect(() => {

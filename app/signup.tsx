@@ -23,7 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
-import { Mail, Lock, Eye, EyeOff, ArrowLeft, UserPlus, Chrome } from 'lucide-react-native';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, UserPlus, Globe } from 'lucide-react-native';
 import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 
 export default function SignUpScreen() {
@@ -308,32 +308,73 @@ export default function SignUpScreen() {
 
     try {
       setLoading(true);
-      console.log('Starting Google OAuth flow...');
+      console.log('Starting Google OAuth flow from signup...');
 
-      const result = await signInWithGoogle();
+      // Prepare comprehensive onboarding data from URL params to pass to Google OAuth
+      const onboardingData: Partial<UserProfile> = {
+        name: params.name as string || `${firstName} ${lastName}`.trim(),
+        height: params.height ? parseInt(params.height as string) : 170,
+        weight: params.weight ? parseInt(params.weight as string) : 70,
+        age: params.age ? parseInt(params.age as string) : 25,
+        gender: (params.gender as 'male' | 'female' | 'other') || 'other',
+        goal: (params.goal as 'weight_loss' | 'weight_gain' | 'maintenance' | 'healthy_lifestyle') || 'healthy_lifestyle',
+        exerciseDuration: params.exerciseDuration ? parseInt(params.exerciseDuration as string) : 30,
+        isSmoker: params.isSmoker === 'true',
+        diseases: params.diseases ? (params.diseases as string).split(',').map(d => d.trim()).filter(Boolean) : [],
+        dietaryPreferences: params.dietaryPreferences ? (params.dietaryPreferences as string).split(',').map(p => p.trim()).filter(Boolean) : [],
+        dietaryRestrictions: [], // Can be added later
+      };
+
+      console.log('Onboarding data for Google OAuth:', onboardingData);
+
+      const result = await signInWithGoogle(onboardingData);
+      console.log('Google OAuth result:', result);
 
       if (result.success) {
         console.log('Google OAuth successful!', { isNewUser: result.isNewUser });
 
         if (result.isNewUser) {
-          // New user - they might need to complete profile setup
-          // For now, redirect to main app as profile will be created from Google data
-          router.replace('/(tabs)');
-        } else {
-          // Existing user - redirect to main app
-          router.replace('/(tabs)');
+          console.log('New Google user detected');
+
+          // Check if profile was created and returned
+          if ((result as any).profile) {
+            // Update the user store with the created profile
+            setProfile((result as any).profile);
+            setOnboarded(true);
+            console.log('New Google user profile created and stored');
+          } else {
+            console.log('Profile creation may have failed, but user was created in Clerk');
+          }
         }
+
+        // Navigate to the main app
+        router.replace('/(tabs)');
       } else {
         console.error('Google OAuth failed:', result.error);
+
+        const errorMessage = result.error || 'Unable to sign up with Google. Please try again or use email sign-up.';
+
         Alert.alert(
-          'Sign-up Failed',
-          'Unable to sign up with Google. Please try again or use email sign-up.',
-          [{ text: 'OK' }]
+          'Google Sign-up Failed',
+          errorMessage,
+          [
+            { text: 'Try Again', onPress: handleGoogleSignIn },
+            { text: 'Use Email Instead', style: 'cancel' }
+          ]
         );
       }
     } catch (err: any) {
       console.error('Google sign-up error:', err);
-      Alert.alert('Error', err.errors?.[0]?.message || 'Google sign-up failed');
+      const errorMessage = err?.message || err?.errors?.[0]?.message || 'An unexpected error occurred during Google sign-up';
+
+      Alert.alert(
+        'Error',
+        errorMessage,
+        [
+          { text: 'Try Again', onPress: handleGoogleSignIn },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
     } finally {
       setLoading(false);
     }
@@ -415,8 +456,8 @@ export default function SignUpScreen() {
           <Button
             title="Continue with Google"
             onPress={handleGoogleSignIn}
-            leftIcon={<Chrome size={18} color="white" />}
-            style={[styles.button, { backgroundColor: '#4285F4' }]}
+            leftIcon={<Globe size={18} color="white" />}
+            style={[styles.button, { backgroundColor: '#55B685' }]}
           />
 
           <View style={styles.divider}>
