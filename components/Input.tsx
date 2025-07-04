@@ -1,14 +1,20 @@
-import React from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  StyleSheet, 
-  ViewStyle, 
+import React, { useRef, useImperativeHandle, forwardRef } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  ViewStyle,
   TextStyle,
-  TextInputProps 
+  TextInputProps
 } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
+
+export interface InputRef {
+  focus: () => void;
+  blur: () => void;
+  clear: () => void;
+}
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -21,7 +27,7 @@ interface InputProps extends TextInputProps {
   rightIcon?: React.ReactNode;
 }
 
-const Input: React.FC<InputProps> = ({
+const Input = forwardRef<InputRef, InputProps>(({
   label,
   error,
   containerStyle,
@@ -31,8 +37,15 @@ const Input: React.FC<InputProps> = ({
   leftIcon,
   rightIcon,
   ...props
-}) => {
+}, ref) => {
   const { colors } = useTheme();
+  const inputRef = useRef<TextInput>(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+    blur: () => inputRef.current?.blur(),
+    clear: () => inputRef.current?.clear(),
+  }));
   
   return (
     <View style={[styles.container, containerStyle]}>
@@ -60,6 +73,7 @@ const Input: React.FC<InputProps> = ({
         )}
 
         <TextInput
+          ref={inputRef}
           style={[
             styles.input,
             {
@@ -92,7 +106,9 @@ const Input: React.FC<InputProps> = ({
       )}
     </View>
   );
-};
+});
+
+Input.displayName = 'Input';
 
 const styles = StyleSheet.create({
   container: {

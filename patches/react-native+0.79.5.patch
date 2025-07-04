@@ -1,0 +1,158 @@
+diff --git a/node_modules/react-native/Libraries/Alert/RCTAlertManager.js b/node_modules/react-native/Libraries/Alert/RCTAlertManager.js
+new file mode 100644
+index 0000000..0ad3742
+--- /dev/null
++++ b/node_modules/react-native/Libraries/Alert/RCTAlertManager.js
+@@ -0,0 +1,16 @@
++/**
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is licensed under the MIT license found in the
++ * LICENSE file in the root directory of this source tree.
++ *
++ * @format
++ * @flow strict-local
++ */
++
++// This file is a workaround for React Native 0.79+ missing RCTAlertManager.js
++// It exports the appropriate platform-specific implementation
++
++import RCTAlertManager from './RCTAlertManager.android.js';
++
++export default RCTAlertManager;
+diff --git a/node_modules/react-native/Libraries/Components/AccessibilityInfo/legacySendAccessibilityEvent.js b/node_modules/react-native/Libraries/Components/AccessibilityInfo/legacySendAccessibilityEvent.js
+new file mode 100644
+index 0000000..d135437
+--- /dev/null
++++ b/node_modules/react-native/Libraries/Components/AccessibilityInfo/legacySendAccessibilityEvent.js
+@@ -0,0 +1,16 @@
++/**
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is licensed under the MIT license found in the
++ * LICENSE file in the root directory of this source tree.
++ *
++ * @format
++ * @flow strict-local
++ */
++
++// This file is a workaround for React Native 0.79+ missing legacySendAccessibilityEvent.js
++// It exports the appropriate platform-specific implementation
++
++import legacySendAccessibilityEvent from './legacySendAccessibilityEvent.android.js';
++
++export default legacySendAccessibilityEvent;
+diff --git a/node_modules/react-native/Libraries/NativeComponent/BaseViewConfig.js b/node_modules/react-native/Libraries/NativeComponent/BaseViewConfig.js
+new file mode 100644
+index 0000000..0bf1419
+--- /dev/null
++++ b/node_modules/react-native/Libraries/NativeComponent/BaseViewConfig.js
+@@ -0,0 +1,16 @@
++/**
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is licensed under the MIT license found in the
++ * LICENSE file in the root directory of this source tree.
++ *
++ * @format
++ * @flow strict-local
++ */
++
++// This file is a workaround for React Native 0.79+ missing BaseViewConfig.js
++// It exports the appropriate platform-specific implementation
++
++import BaseViewConfig from './BaseViewConfig.android.js';
++
++export default BaseViewConfig;
+diff --git a/node_modules/react-native/Libraries/Network/RCTNetworking.js b/node_modules/react-native/Libraries/Network/RCTNetworking.js
+new file mode 100644
+index 0000000..11410fc
+--- /dev/null
++++ b/node_modules/react-native/Libraries/Network/RCTNetworking.js
+@@ -0,0 +1,16 @@
++/**
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is licensed under the MIT license found in the
++ * LICENSE file in the root directory of this source tree.
++ *
++ * @format
++ * @flow strict-local
++ */
++
++// This file is a workaround for React Native 0.79+ missing RCTNetworking.js
++// It exports the appropriate platform-specific implementation
++
++import RCTNetworking from './RCTNetworking.android.js';
++
++export default RCTNetworking;
+diff --git a/node_modules/react-native/Libraries/StyleSheet/PlatformColorValueTypes.js b/node_modules/react-native/Libraries/StyleSheet/PlatformColorValueTypes.js
+new file mode 100644
+index 0000000..83dbc51
+--- /dev/null
++++ b/node_modules/react-native/Libraries/StyleSheet/PlatformColorValueTypes.js
+@@ -0,0 +1,20 @@
++/**
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is licensed under the MIT license found in the
++ * LICENSE file in the root directory of this source tree.
++ *
++ * @format
++ * @flow strict-local
++ */
++
++// This file is a workaround for React Native 0.79+ missing PlatformColorValueTypes.js
++// It exports the appropriate platform-specific implementation
++
++import {
++  PlatformColor,
++  normalizeColorObject,
++  processColorObject,
++} from './PlatformColorValueTypes.android.js';
++
++export {PlatformColor, normalizeColorObject, processColorObject};
+diff --git a/node_modules/react-native/Libraries/Utilities/BackHandler.js b/node_modules/react-native/Libraries/Utilities/BackHandler.js
+new file mode 100644
+index 0000000..12707d2
+--- /dev/null
++++ b/node_modules/react-native/Libraries/Utilities/BackHandler.js
+@@ -0,0 +1,16 @@
++/**
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is licensed under the MIT license found in the
++ * LICENSE file in the root directory of this source tree.
++ *
++ * @format
++ * @flow strict-local
++ */
++
++// This file is a workaround for React Native 0.79+ missing BackHandler.js
++// It exports the appropriate platform-specific implementation
++
++import BackHandler from './BackHandler.android.js';
++
++export default BackHandler;
+diff --git a/node_modules/react-native/Libraries/Utilities/Platform.js b/node_modules/react-native/Libraries/Utilities/Platform.js
+new file mode 100644
+index 0000000..c77d894
+--- /dev/null
++++ b/node_modules/react-native/Libraries/Utilities/Platform.js
+@@ -0,0 +1,16 @@
++/**
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is licensed under the MIT license found in the
++ * LICENSE file in the root directory of this source tree.
++ *
++ * @format
++ * @flow strict
++ */
++
++// This file is a workaround for React Native 0.79+ missing Platform.js
++// It exports the appropriate platform-specific implementation
++
++import Platform from './Platform.android.js';
++
++export default Platform;

@@ -28,7 +28,7 @@ export async function syncClerkUserToSupabase(
 
     // Create new profile from Clerk user data and onboarding data
     const newProfile: UserProfile = {
-      id: undefined, // Let Supabase auto-generate the ID
+      // Don't set id - let Supabase auto-generate it
       userId: clerkUser.id,
       email: clerkUser.primaryEmailAddress?.emailAddress || '',
       // Use name from onboarding data since Clerk doesn't store firstName/lastName in this config

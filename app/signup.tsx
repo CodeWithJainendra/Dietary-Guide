@@ -9,13 +9,13 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
 import { useSignUp, useAuth, useUser } from '@clerk/clerk-expo';
 import { useRouter, Link, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useGoogleOAuth } from '@/lib/clerk';
 import { useUserStore } from '@/store/userStore';
 import { handleSignupComplete } from '@/lib/clerk-supabase-integration';
 import { UserProfile } from '@/types';
@@ -24,6 +24,7 @@ import Input from '@/components/Input';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, UserPlus, Chrome } from 'lucide-react-native';
+import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 
 export default function SignUpScreen() {
   const { colors } = useTheme();
@@ -31,8 +32,9 @@ export default function SignUpScreen() {
   const { signUp, setActive, isLoaded } = useSignUp();
   const { isSignedIn } = useAuth();
   const { user } = useUser();
+  const { signInWithGoogle } = useGoogleOAuth();
   const params = useLocalSearchParams();
-  const { setProfile } = useUserStore();
+  const { setProfile, setOnboarded } = useUserStore();
 
   // Clear verification flag when component unmounts
   React.useEffect(() => {
@@ -136,8 +138,9 @@ export default function SignUpScreen() {
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       console.log('Email verification prepared, showing verification screen');
 
-      // Set a flag to indicate user is in verification process
+      // Set flags to indicate user is in verification/signup process
       await AsyncStorage.setItem('pendingEmailVerification', 'true');
+      await AsyncStorage.setItem('inSignupProcess', 'true');
 
       setPendingVerification(true);
     } catch (err: any) {
@@ -222,12 +225,17 @@ export default function SignUpScreen() {
         await setActive({ session: result.createdSessionId });
         console.log('Active session set successfully');
 
-        // Clear the verification flag
+        // Clear the verification and signup flags
         await AsyncStorage.removeItem('pendingEmailVerification');
+        await AsyncStorage.removeItem('inSignupProcess');
 
         // After successful verification, save user data to Supabase
+        console.log('=== STARTING PROFILE SAVE PROCESS ===');
         console.log('Saving user data to Supabase after verification...');
         console.log('Created user ID:', result.createdUserId);
+        console.log('Email:', email);
+        console.log('First name:', firstName);
+        console.log('Last name:', lastName);
 
         // Create a mock user object with the essential data we need
         const createdUser = {
@@ -262,6 +270,9 @@ export default function SignUpScreen() {
             // Update the user store with the profile
             setProfile(syncResult.profile);
             console.log('User profile saved to Supabase successfully');
+
+            // Mark user as onboarded since we have all the data from the signup flow
+            setOnboarded(true);
           } else {
             console.error('Failed to save user profile to Supabase:', syncResult.error);
             // Don't block the user from proceeding, just log the error
@@ -273,7 +284,7 @@ export default function SignUpScreen() {
 
         // Navigate to the main app
         console.log('Navigating to main app...');
-        router.replace('/(tabs)/index');
+        router.replace('/(tabs)');
       } else {
         Alert.alert('Error', 'Verification failed. Please try again.');
       }
@@ -291,19 +302,50 @@ export default function SignUpScreen() {
     }
   };
 
-  // Handle Google sign-in (placeholder)
+  // Handle Google sign-in
   const handleGoogleSignIn = async () => {
-    Alert.alert('Coming Soon', 'Google sign-in will be available soon!');
+    if (!isLoaded) return;
+
+    try {
+      setLoading(true);
+      console.log('Starting Google OAuth flow...');
+
+      const result = await signInWithGoogle();
+
+      if (result.success) {
+        console.log('Google OAuth successful!', { isNewUser: result.isNewUser });
+
+        if (result.isNewUser) {
+          // New user - they might need to complete profile setup
+          // For now, redirect to main app as profile will be created from Google data
+          router.replace('/(tabs)');
+        } else {
+          // Existing user - redirect to main app
+          router.replace('/(tabs)');
+        }
+      } else {
+        console.error('Google OAuth failed:', result.error);
+        Alert.alert(
+          'Sign-up Failed',
+          'Unable to sign up with Google. Please try again or use email sign-up.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (err: any) {
+      console.error('Google sign-up error:', err);
+      Alert.alert('Error', err.errors?.[0]?.message || 'Google sign-up failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (pendingVerification) {
     console.log('Rendering verification screen');
     return (
-      <KeyboardAvoidingView
+      <KeyboardAvoidingWrapper
         style={[styles.container, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        contentContainerStyle={styles.scrollContent}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <TouchableOpacity
               onPress={() => setPendingVerification(false)}
@@ -311,7 +353,7 @@ export default function SignUpScreen() {
             >
               <ArrowLeft size={24} color={colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.title, { color: colors.text }]}>Verify Your Email</Text>
+
           </View>
 
           <Card style={styles.card}>
@@ -341,17 +383,15 @@ export default function SignUpScreen() {
               style={styles.button}
             />
           </Card>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingWrapper>
     );
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingWrapper
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      contentContainerStyle={styles.scrollContent}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -359,7 +399,7 @@ export default function SignUpScreen() {
           >
             <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
+
         </View>
 
         <Card style={styles.card}>
@@ -468,8 +508,7 @@ export default function SignUpScreen() {
             </Link>
           </View>
         </Card>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingWrapper>
   );
 }
 

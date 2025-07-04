@@ -1,15 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
-  FlatList, 
-  KeyboardAvoidingView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
   Platform,
   Animated,
-  Dimensions
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -19,8 +18,10 @@ import { useNutritionStore } from '@/store/nutritionStore';
 import ChatMessage from '@/components/ChatMessage';
 import { Message, CoreMessage } from '@/types';
 import { chatWithAI } from '@/utils/aiService';
-import { Send, Sparkles, Mic, MicOff } from 'lucide-react-native';
-import { supabase, saveChatMessage, fetchChatHistory } from '@/lib/supabase';
+import { Send, Sparkles } from 'lucide-react-native';
+import { saveChatMessage, fetchChatHistory } from '@/lib/supabase';
+import { generateUUID } from '@/utils/uuid';
+import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 
 export default function ChatScreen() {
   const { colors } = useTheme();
@@ -29,29 +30,36 @@ export default function ChatScreen() {
   const setAvatarMood = useNutritionStore((state) => state.setAvatarMood);
   
   const [inputText, setInputText] = useState('');
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [typingAnimation] = useState(new Animated.Value(0));
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [displayedMessagesCount, setDisplayedMessagesCount] = useState(10);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [isInitialRender, setIsInitialRender] = useState(true);
   const flatListRef = useRef<FlatList>(null);
-  const screenWidth = Dimensions.get('window').width;
   
-  // Initialize with a welcome message if no messages exist
+  // Initialize with a welcome message if no messages exist and history is loaded
   useEffect(() => {
-    if (messages.length === 0 && profile) {
+    if (messages.length === 0 && profile && !isLoadingHistory) {
       const welcomeMessage: Message = {
-        id: 'welcome-' + Date.now().toString(),
+        id: 'welcome-' + generateUUID(),
         role: 'assistant',
         content: `Hello ${profile.name}! 👋 I'm your AI wellness companion. I'm here to help you achieve your health goals and provide personalized nutrition advice. How can I assist you today?`,
         timestamp: Date.now(),
       };
-      
+
       addMessage(welcomeMessage);
-      
-      // Speak the welcome message
-      if (Platform.OS !== 'web') {
-        speakMessage(welcomeMessage.content);
-      }
+      setDisplayedMessagesCount(10);
+      setShouldAutoScroll(true);
+      // Keep initial render true for welcome message to scroll to bottom
+
+      // Force scroll to bottom after welcome message is added
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 200);
     }
-  }, [messages.length, profile, addMessage]);
+  }, [messages.length, profile, addMessage, isLoadingHistory]);
   
   // Animate typing indicator
   useEffect(() => {
@@ -74,63 +82,151 @@ export default function ChatScreen() {
       typingAnimation.setValue(0);
     }
   }, [isLoading, typingAnimation]);
-  
-  const speakMessage = (text: string) => {
-    if (isSpeaking) {
-      // Stop speaking if already speaking
-      if (Platform.OS !== 'web') {
-        // This would use Speech.stop() if expo-speech was available
-      }
+
+  // Handle initial scroll to bottom after history is loaded
+  useEffect(() => {
+    if (!isLoadingHistory && messages.length > 0) {
+      // Ensure we scroll to bottom on initial load
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+      // Mark initial render as complete after scrolling
+      setTimeout(() => {
+        setIsInitialRender(false);
+      }, 2000);
     }
-    
-    setIsSpeaking(true);
-    
-    // Clean up text for speech (remove emojis, etc.)
-    const cleanText = text.replace(/[^\x00-\x7F]/g, "").trim();
-    
-    // This would use Speech.speak() if expo-speech was available
-    // For now, just simulate speaking
-    setTimeout(() => {
-      setIsSpeaking(false);
-    }, 3000);
-  };
+  }, [isLoadingHistory, messages.length]);
+
+  // Additional effect to ensure scroll to bottom on initial render
+  useEffect(() => {
+    if (isInitialRender && messages.length > 0 && !isLoadingHistory) {
+      const scrollToBottom = () => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      };
+
+      // Multiple attempts to ensure scroll works
+      setTimeout(scrollToBottom, 100);
+      setTimeout(scrollToBottom, 300);
+      setTimeout(scrollToBottom, 500);
+    }
+  }, [isInitialRender, messages.length, isLoadingHistory]);
+  
+
   
   // On mount, fetch chat history from Supabase and set in store
   useEffect(() => {
     const loadHistory = async () => {
-      // Use profile.userId if profile.id is missing
-      const userId = profile?.id || profile?.userId;
-      if (userId) {
-        const { success, messages } = await fetchChatHistory(userId.toString());
-        if (success && Array.isArray(messages)) {
+      if (!profile?.userId) {
+        setIsLoadingHistory(false);
+        return;
+      }
+
+      try {
+        console.log('Loading chat history for user:', profile.userId);
+        const { success, messages, error } = await fetchChatHistory(profile.userId);
+
+        if (success && Array.isArray(messages) && messages.length > 0) {
           // Convert Supabase rows to Message[]
           const formatted = messages.map((msg: any) => ({
-            id: msg.id || msg.created_at,
-            role: msg.sender,
+            id: msg.id || `${msg.created_at}-${msg.sender}`,
+            role: msg.sender as 'user' | 'assistant',
             content: msg.message,
             timestamp: new Date(msg.created_at).getTime(),
           }));
+
+          console.log('Loaded chat history:', formatted.length, 'messages');
           setMessages(formatted);
+        } else if (!success) {
+          console.error('Failed to load chat history:', error);
+        } else {
+          console.log('No chat history found for user');
+          // Clear any existing messages if no history found
+          setMessages([]);
         }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+      } finally {
+        setIsLoadingHistory(false);
       }
     };
-    loadHistory();
-  }, [profile?.id, profile?.userId]);
+
+    if (profile?.userId) {
+      loadHistory();
+    }
+  }, [profile?.userId, setMessages]);
+
+  // Refresh chat history
+  const onRefresh = async () => {
+    if (!profile?.userId) return;
+
+    setIsRefreshing(true);
+    try {
+      console.log('Refreshing chat history for user:', profile.userId);
+      const { success, messages, error } = await fetchChatHistory(profile.userId);
+
+      if (success && Array.isArray(messages)) {
+        const formatted = messages.map((msg: any) => ({
+          id: msg.id || `${msg.created_at}-${msg.sender}`,
+          role: msg.sender as 'user' | 'assistant',
+          content: msg.message,
+          timestamp: new Date(msg.created_at).getTime(),
+        }));
+
+        console.log('Refreshed chat history:', formatted.length, 'messages');
+        setMessages(formatted);
+      } else if (!success) {
+        console.error('Failed to refresh chat history:', error);
+      }
+    } catch (error) {
+      console.error('Error refreshing chat history:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Load older messages (pagination)
+  const loadOlderMessages = async () => {
+    if (isLoadingOlder || displayedMessagesCount >= messages.length) return;
+
+    setIsLoadingOlder(true);
+    setIsInitialRender(false); // Mark that we're no longer in initial render
+    setShouldAutoScroll(false); // Disable auto-scroll when loading older messages
+
+    // Simulate loading delay for better UX
+    setTimeout(() => {
+      setDisplayedMessagesCount(prev => Math.min(prev + 10, messages.length));
+      setIsLoadingOlder(false);
+    }, 500);
+  };
+
+  // Get displayed messages (last N messages)
+  const displayedMessages = messages.slice(-displayedMessagesCount);
+
+  // Check if there are older messages to load
+  const hasOlderMessages = displayedMessagesCount < messages.length;
 
   const handleSend = async () => {
-    if (!inputText.trim()) return;
-    // Use profile.userId if profile.id is missing
-    const userId = profile?.id || profile?.userId;
+    const trimmedText = inputText.trim();
+    if (!trimmedText) return;
+
+    // Use profile.userId (Clerk ID) for foreign key reference
+    const userId = profile?.userId;
     if (!userId) return; // Ensure user is loaded
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: generateUUID(),
       role: 'user',
-      content: inputText,
+      content: trimmedText,
       timestamp: Date.now(),
     };
     addMessage(userMessage);
     setInputText('');
+
+    // Reset pagination to show latest messages and enable auto-scroll
+    setDisplayedMessagesCount(10);
+    setShouldAutoScroll(true);
+    setIsInitialRender(false); // No longer initial render after user sends message
     try {
       await saveChatMessage({
         userId: userId.toString(),
@@ -206,14 +302,18 @@ export default function ChatScreen() {
       
       // Add AI response to chat
       const assistantMessage: Message = {
-        id: Date.now().toString(),
+        id: generateUUID(),
         role: 'assistant',
         content: response,
         timestamp: Date.now(),
       };
       
       addMessage(assistantMessage);
-      const userId = profile?.id || profile?.userId;
+
+      // Ensure we show the latest messages including the new response and enable auto-scroll
+      setDisplayedMessagesCount(prev => Math.max(prev, 10));
+      setShouldAutoScroll(true);
+      const userId = profile?.userId;
       if (!userId) return;
       try {
         await saveChatMessage({
@@ -230,18 +330,13 @@ export default function ChatScreen() {
       
       // Add error message
       const errorMessage: Message = {
-        id: Date.now().toString(),
+        id: generateUUID(),
         role: 'assistant',
         content: "I'm here to help! 😊 It seems there was a small hiccup. Please try asking me again - I'm excited to support your wellness journey! 💪✨",
         timestamp: Date.now(),
       };
       
       addMessage(errorMessage);
-      
-      // Speak the error message if on native platform
-      if (Platform.OS !== 'web') {
-        speakMessage(errorMessage.content);
-      }
     } finally {
       setLoading(false);
     }
@@ -260,24 +355,7 @@ export default function ChatScreen() {
     setInputText(question);
   };
   
-  const toggleSpeaking = () => {
-    if (isSpeaking) {
-      // Stop speaking
-      if (Platform.OS !== 'web') {
-        // This would use Speech.stop() if expo-speech was available
-      }
-      setIsSpeaking(false);
-    } else if (messages.length > 0) {
-      // Speak the last assistant message
-      const lastAssistantMessage = [...messages]
-        .reverse()
-        .find(msg => msg.role === 'assistant');
-      
-      if (lastAssistantMessage && Platform.OS !== 'web') {
-        speakMessage(lastAssistantMessage.content);
-      }
-    }
-  };
+
   
   // Typing indicator dots animation
   const typingDot1Opacity = typingAnimation.interpolate({
@@ -296,13 +374,21 @@ export default function ChatScreen() {
   });
   
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
-      <KeyboardAvoidingView
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <KeyboardAvoidingWrapper
         style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        enableScrollView={false}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {messages.length === 0 ? (
+        {isLoadingHistory ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Loading your chat history...
+            </Text>
+          </View>
+        ) : messages.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Sparkles size={48} color={colors.primary} style={styles.emptyIcon} />
             <Text style={[styles.emptyTitle, { color: colors.text }]}>
@@ -333,21 +419,57 @@ export default function ChatScreen() {
           <>
             <FlatList
               ref={flatListRef}
-              data={messages}
+              data={displayedMessages}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <ChatMessage 
-                  message={item} 
-                  onPress={() => {
-                    if (item.role === 'assistant' && Platform.OS !== 'web') {
-                      speakMessage(item.content);
-                    }
-                  }}
+                <ChatMessage
+                  message={item}
                 />
               )}
               contentContainerStyle={styles.messagesContainer}
-              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-              onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              onContentSizeChange={() => {
+                // Auto-scroll to bottom on initial render or when sending new messages
+                // But NOT when loading older messages
+                if ((isInitialRender || shouldAutoScroll) && !isLoadingOlder) {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: true });
+                  }, 50);
+                }
+              }}
+              onLayout={() => {
+                // Auto-scroll to bottom on initial layout or when sending new messages
+                // But NOT when loading older messages
+                if ((isInitialRender || shouldAutoScroll) && !isLoadingOlder) {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: true });
+                  }, 50);
+                }
+              }}
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              ListHeaderComponent={
+                hasOlderMessages ? (
+                  <View style={styles.loadOlderContainer}>
+                    <TouchableOpacity
+                      style={[styles.loadOlderButton, {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                        opacity: isLoadingOlder ? 0.6 : 1
+                      }]}
+                      onPress={loadOlderMessages}
+                      disabled={isLoadingOlder}
+                    >
+                      {isLoadingOlder ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : (
+                        <Text style={[styles.loadOlderText, { color: colors.primary }]}>
+                          Load older messages
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ) : null
+              }
               ListFooterComponent={
                 isLoading ? (
                   <View style={[styles.typingIndicator, { backgroundColor: colors.card }]}>
@@ -362,54 +484,70 @@ export default function ChatScreen() {
               }
             />
             
-            {Platform.OS !== 'web' && (
-              <TouchableOpacity 
-                style={[
-                  styles.speakButton, 
-                  { backgroundColor: isSpeaking ? colors.error : colors.primary }
-                ]}
-                onPress={toggleSpeaking}
-              >
-                {isSpeaking ? (
-                  <MicOff size={20} color="white" />
-                ) : (
-                  <Mic size={20} color="white" />
-                )}
-              </TouchableOpacity>
-            )}
+
           </>
         )}
         
-        <View style={[styles.inputContainer, { 
+        <View style={[styles.inputContainer, {
           borderTopColor: colors.border,
-          backgroundColor: colors.card 
+          backgroundColor: colors.card,
+          shadowColor: colors.text,
         }]}>
-          <TextInput
-            style={[styles.input, { 
-              backgroundColor: colors.background,
-              color: colors.text,
-              borderColor: colors.border
-            }]}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Ask me anything about your wellness journey..."
-            placeholderTextColor={colors.textSecondary}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              { backgroundColor: colors.primary },
-              (!inputText.trim() || isLoading) && styles.sendButtonDisabled
-            ]}
-            onPress={handleSend}
-            disabled={!inputText.trim() || isLoading}
-          >
-            <Send size={20} color="white" />
-          </TouchableOpacity>
+          <View style={[styles.inputWrapper, {
+            backgroundColor: colors.background,
+            borderColor: colors.border
+          }]}>
+            <View style={styles.inputSection}>
+              <TextInput
+                style={[styles.input, {
+                  color: colors.text,
+                }]}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="Ask me anything..."
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                maxLength={500}
+                textAlignVertical="center"
+              />
+              {inputText.length > 400 && (
+                <Text style={[styles.characterCount, {
+                  color: inputText.length > 480 ? colors.error : colors.textSecondary
+                }]}>
+                  {inputText.length}/500
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                {
+                  backgroundColor: inputText.trim() && !isLoading ? colors.primary : colors.inactive,
+                  transform: [{
+                    scale: inputText.trim() && !isLoading ? 1 : 0.85
+                  }],
+                  opacity: inputText.trim() || isLoading ? 1 : 0.6
+                }
+              ]}
+              onPress={handleSend}
+              disabled={!inputText.trim() || isLoading}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <ActivityIndicator size={18} color="white" />
+              ) : (
+                <Send
+                  size={18}
+                  color="white"
+                  style={{
+                    transform: [{ translateX: 1 }] // Slight offset for better visual alignment
+                  }}
+                />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingWrapper>
     </SafeAreaView>
   );
 }
@@ -423,13 +561,24 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: 8, // Minimized padding for better keyboard handling
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: 'center',
   },
   emptyIcon: {
     marginBottom: 16,
@@ -473,46 +622,59 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   inputContainer: {
-    flexDirection: 'row',
-    padding: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 12,
     borderTopWidth: 1,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
     alignItems: 'flex-end',
+    borderRadius: 25,
+    borderWidth: 1.5,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    minHeight: 42,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  inputSection: {
+    flex: 1,
   },
   input: {
-    flex: 1,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    maxHeight: 100,
     fontSize: 16,
-    borderWidth: 1,
+    lineHeight: 20,
+    maxHeight: 100,
+    minHeight: 20,
+    paddingVertical: 4,
+    paddingHorizontal: 0,
+  },
+  characterCount: {
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: 2,
+    marginBottom: 4,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
-  },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
-  speakButton: {
-    position: 'absolute',
-    bottom: 80,
-    right: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
+    marginLeft: 12,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 3,
-    elevation: 3,
-    zIndex: 10,
+    elevation: 4,
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
   },
   typingIndicator: {
     flexDirection: 'row',
@@ -537,5 +699,23 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     marginHorizontal: 2,
+  },
+  loadOlderContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  loadOlderButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 160,
+  },
+  loadOlderText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

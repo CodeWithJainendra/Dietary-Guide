@@ -1,13 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
-  FlatList, 
-  KeyboardAvoidingView, 
-  Platform 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -19,28 +19,78 @@ import ChatMessage from '@/components/ChatMessage';
 import { Message, CoreMessage } from '@/types';
 import { chatWithAI } from '@/utils/aiService';
 import { Send, ArrowLeft, Home, MessageCircle, BarChart2, User } from 'lucide-react-native';
+import { saveChatMessage, fetchChatHistory } from '@/lib/supabase';
+import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 
 export default function ChatScreen() {
   const { colors, shadows } = useTheme();
-  const { messages, addMessage, isLoading, setLoading } = useChatStore();
+  const { messages, addMessage, isLoading, setLoading, setMessages } = useChatStore();
   const profile = useUserStore((state) => state.profile);
   const setAvatarMood = useNutritionStore((state) => state.setAvatarMood);
-  
+
   const [inputText, setInputText] = useState('');
   const flatListRef = useRef<FlatList>(null);
+
+  // Load chat history on mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (!profile?.userId) return;
+
+      try {
+        console.log('Loading chat history for user:', profile.userId);
+        const { success, messages, error } = await fetchChatHistory(profile.userId);
+
+        if (success && Array.isArray(messages) && messages.length > 0) {
+          const formatted = messages.map((msg: any) => ({
+            id: msg.id || `${msg.created_at}-${msg.sender}`,
+            role: msg.sender as 'user' | 'assistant',
+            content: msg.message,
+            timestamp: new Date(msg.created_at).getTime(),
+          }));
+
+          console.log('Loaded chat history:', formatted.length, 'messages');
+          setMessages(formatted);
+        } else if (!success) {
+          console.error('Failed to load chat history:', error);
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+      }
+    };
+
+    if (profile?.userId) {
+      loadHistory();
+    }
+  }, [profile?.userId, setMessages]);
   
   const handleSend = async () => {
-    if (!inputText.trim() || isLoading) return;
-    
+    const trimmedText = inputText.trim();
+    if (!trimmedText || isLoading) return;
+
+    const userId = profile?.userId;
+    if (!userId) return;
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputText,
+      content: trimmedText,
       timestamp: Date.now(),
     };
-    
+
     addMessage(userMessage);
     setInputText('');
+
+    // Save user message to database
+    try {
+      await saveChatMessage({
+        userId: userId.toString(),
+        message: userMessage.content,
+        sender: userMessage.role,
+        timestamp: userMessage.timestamp,
+      });
+    } catch (e) {
+      console.error('Failed to save user message to Supabase:', e);
+    }
     
     // Check for mood indicators in the message
     const content = inputText.toLowerCase();
@@ -94,8 +144,20 @@ export default function ChatScreen() {
         content: response,
         timestamp: Date.now(),
       };
-      
+
       addMessage(assistantMessage);
+
+      // Save AI response to database
+      try {
+        await saveChatMessage({
+          userId: userId.toString(),
+          message: assistantMessage.content,
+          sender: assistantMessage.role,
+          timestamp: assistantMessage.timestamp,
+        });
+      } catch (e) {
+        console.error('Failed to save assistant message to Supabase:', e);
+      }
     } catch (error) {
       console.error('Error in chat:', error);
       
@@ -131,13 +193,13 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Chat with AI</Text>
+
         <View style={styles.headerRight} />
       </View>
       
-      <KeyboardAvoidingView
+      <KeyboardAvoidingWrapper
         style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        enableScrollView={false}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {messages.length === 0 ? (
@@ -159,29 +221,66 @@ export default function ChatScreen() {
           />
         )}
         
-        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.background, color: colors.text }]}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Type your message..."
-            placeholderTextColor={colors.textSecondary}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              { backgroundColor: colors.primary },
-              (!inputText.trim() || isLoading) && { backgroundColor: colors.inactive }
-            ]}
-            onPress={handleSend}
-            disabled={!inputText.trim() || isLoading}
-          >
-            <Send size={20} color="white" />
-          </TouchableOpacity>
+        <View style={[styles.inputContainer, {
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
+          shadowColor: colors.text,
+        }]}>
+          <View style={[styles.inputWrapper, {
+            backgroundColor: colors.background,
+            borderColor: colors.border
+          }]}>
+            <View style={styles.inputSection}>
+              <TextInput
+                style={[styles.input, {
+                  color: colors.text,
+                }]}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="Ask me anything..."
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                maxLength={500}
+                textAlignVertical="center"
+              />
+              {inputText.length > 400 && (
+                <Text style={[styles.characterCount, {
+                  color: inputText.length > 480 ? colors.error : colors.textSecondary
+                }]}>
+                  {inputText.length}/500
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                {
+                  backgroundColor: inputText.trim() && !isLoading ? colors.primary : colors.inactive,
+                  transform: [{
+                    scale: inputText.trim() && !isLoading ? 1 : 0.85
+                  }],
+                  opacity: inputText.trim() || isLoading ? 1 : 0.6
+                }
+              ]}
+              onPress={handleSend}
+              disabled={!inputText.trim() || isLoading}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <ActivityIndicator size={18} color="white" />
+              ) : (
+                <Send
+                  size={18}
+                  color="white"
+                  style={{
+                    transform: [{ translateX: 1 }] // Slight offset for better visual alignment
+                  }}
+                />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingWrapper>
       
       <View style={[styles.tabBar, { backgroundColor: colors.card, borderTopColor: colors.border }, shadows?.medium || {}]}>
         <TouchableOpacity 
@@ -274,25 +373,54 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   inputContainer: {
-    flexDirection: 'row',
     padding: 16,
     borderTopWidth: 1,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
   },
-  input: {
-    flex: 1,
-    borderRadius: 8,
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderRadius: 25,
+    borderWidth: 1.5,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    maxHeight: 100,
+    minHeight: 50,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  inputSection: {
+    flex: 1,
+  },
+  input: {
     fontSize: 16,
+    lineHeight: 20,
+    maxHeight: 100,
+    minHeight: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+  },
+  characterCount: {
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: 2,
+    marginBottom: 4,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    marginLeft: 12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
   },
   tabBar: {
     flexDirection: 'row',

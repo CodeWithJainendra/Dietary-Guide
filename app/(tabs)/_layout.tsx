@@ -14,6 +14,7 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
+          borderTopWidth: 1,
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -29,6 +30,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Home',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
         }}
       />
@@ -36,6 +38,7 @@ export default function TabsLayout() {
         name="chat"
         options={{
           title: 'IRA',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => <MessageCircle size={size} color={color} />,
         }}
       />
@@ -43,6 +46,7 @@ export default function TabsLayout() {
         name="stats"
         options={{
           title: 'Stats',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => <BarChart2 size={size} color={color} />,
         }}
       />
@@ -50,6 +54,7 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
         }}
       />

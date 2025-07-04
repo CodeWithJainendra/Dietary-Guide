@@ -6,7 +6,7 @@ export type UserProfile = {
   height: number; // in cm
   weight: number; // in kg
   age: number;
-  gender: 'male' | 'female' | 'other';
+  gender: 'male' | 'female' | 'other'; // Always lowercase
   goal: 'weight_loss' | 'weight_gain' | 'maintenance' | 'healthy_lifestyle';
   exerciseDuration: number; // in minutes
   dietaryRestrictions: string[];

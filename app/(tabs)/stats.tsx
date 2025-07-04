@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useUserStore } from '@/store/userStore';
@@ -7,7 +7,7 @@ import { useNutritionStore } from '@/store/nutritionStore';
 import Card from '@/components/Card';
 import HealthStatsCard from '@/components/HealthStatsCard';
 import { getHealthInsights } from '@/utils/aiService';
-import { BarChart2, Activity, TrendingUp, Calendar, Heart, Clock, AlertTriangle, CheckCircle, Target, Zap } from 'lucide-react-native';
+import { BarChart2, Activity, TrendingUp, Calendar, Heart, Clock, AlertTriangle, CheckCircle, Target, Zap, Brain, Lightbulb, RefreshCw, Sparkles, TrendingDown } from 'lucide-react-native';
 
 export default function StatsScreen() {
   const { colors } = useTheme();
@@ -187,15 +187,82 @@ export default function StatsScreen() {
     return { risks, recommendations };
   };
   
+  // Parse AI insights into structured format
+  const parseHealthInsights = (insights: string) => {
+    if (!insights) return null;
+
+    // Clean up markdown formatting
+    const cleanText = (text: string) => {
+      return text
+        .replace(/\*\*(.*?)\*\*/g, '$1') // Remove **bold** formatting
+        .replace(/\*(.*?)\*/g, '$1')     // Remove *italic* formatting
+        .replace(/^\d+\.\s*/, '')        // Remove numbered list markers
+        .replace(/^[-•*]\s*/, '')        // Remove bullet points
+        .trim();
+    };
+
+    // Split insights into sections based on common patterns
+    const sections = [];
+    const lines = insights.split('\n').filter(line => line.trim());
+
+    let currentSection = { type: 'general', title: 'Health Overview', items: [] };
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) continue;
+
+      const cleanedLine = cleanText(trimmedLine);
+      if (!cleanedLine) continue;
+
+      // Detect section headers
+      if (trimmedLine.toLowerCase().includes('nutrition') || trimmedLine.toLowerCase().includes('diet')) {
+        if (currentSection.items.length > 0) sections.push(currentSection);
+        currentSection = { type: 'nutrition', title: 'Nutrition Insights', items: [] };
+        // Don't add the header line itself, just switch sections
+        continue;
+      } else if (trimmedLine.toLowerCase().includes('exercise') || trimmedLine.toLowerCase().includes('activity')) {
+        if (currentSection.items.length > 0) sections.push(currentSection);
+        currentSection = { type: 'exercise', title: 'Exercise Insights', items: [] };
+        continue;
+      } else if (trimmedLine.toLowerCase().includes('sleep') || trimmedLine.toLowerCase().includes('rest')) {
+        if (currentSection.items.length > 0) sections.push(currentSection);
+        currentSection = { type: 'sleep', title: 'Sleep & Recovery', items: [] };
+        continue;
+      } else if (trimmedLine.toLowerCase().includes('goal') || trimmedLine.toLowerCase().includes('progress')) {
+        if (currentSection.items.length > 0) sections.push(currentSection);
+        currentSection = { type: 'goals', title: 'Goal Progress', items: [] };
+        continue;
+      } else {
+        // Add cleaned content to current section
+        if (cleanedLine.length > 10) { // Only add substantial content
+          currentSection.items.push(cleanedLine);
+        }
+      }
+    }
+
+    if (currentSection.items.length > 0) sections.push(currentSection);
+
+    // If no sections were created or all sections are empty, create a general section
+    if (sections.length === 0 || sections.every(s => s.items.length === 0)) {
+      const cleanedInsights = cleanText(insights);
+      if (cleanedInsights) {
+        return [{ type: 'general', title: 'AI Health Insights', items: [cleanedInsights] }];
+      }
+    }
+
+    return sections.filter(section => section.items.length > 0);
+  };
+
   const loadHealthInsights = async () => {
     if (!profile) return;
-    
+
     try {
       setIsLoadingInsights(true);
       const insights = await getHealthInsights(profile);
       setHealthInsights(insights);
     } catch (error) {
       console.error('Error loading health insights:', error);
+      setHealthInsights('Unable to load health insights at this time. Please try again later.');
     } finally {
       setIsLoadingInsights(false);
     }
@@ -237,7 +304,7 @@ export default function StatsScreen() {
   }
   
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
@@ -245,7 +312,7 @@ export default function StatsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <Text style={[styles.title, { color: colors.text }]}>Health Stats</Text>
+
         
         {/* BMI Card */}
         <HealthStatsCard
@@ -487,24 +554,97 @@ export default function StatsScreen() {
         )}
         
         {/* AI Health Insights */}
-        <Card style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Calendar size={24} color={colors.primary} />
-            <Text style={[styles.cardTitle, { color: colors.text }]}>AI Health Insights</Text>
+        <Card style={[styles.card, styles.insightsCard]}>
+          <View style={styles.insightsHeader}>
+            <View style={styles.insightsHeaderLeft}>
+              <View style={[styles.aiIconContainer, { backgroundColor: colors.primary + '20' }]}>
+                <Brain size={24} color={colors.primary} />
+              </View>
+              <View>
+                <Text style={[styles.insightsTitle, { color: colors.text }]}>AI Health Insights</Text>
+                <Text style={[styles.insightsSubtitle, { color: colors.textSecondary }]}>
+                  Personalized recommendations
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              style={[styles.refreshButton, { backgroundColor: colors.primary + '15' }]}
+              onPress={loadHealthInsights}
+              disabled={isLoadingInsights}
+            >
+              <RefreshCw
+                size={18}
+                color={colors.primary}
+                style={isLoadingInsights ? { transform: [{ rotate: '180deg' }] } : {}}
+              />
+            </Pressable>
           </View>
-          
+
           {isLoadingInsights ? (
-            <Text style={[styles.insightsText, { color: colors.textSecondary }]}>
-              Loading personalized health insights...
-            </Text>
+            <View style={styles.loadingContainer}>
+              <View style={[styles.loadingIndicator, { backgroundColor: colors.primary + '20' }]}>
+                <Sparkles size={20} color={colors.primary} />
+              </View>
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                Analyzing your health data...
+              </Text>
+              <View style={styles.loadingDots}>
+                <View style={[styles.loadingDot, { backgroundColor: colors.primary }]} />
+                <View style={[styles.loadingDot, { backgroundColor: colors.primary }]} />
+                <View style={[styles.loadingDot, { backgroundColor: colors.primary }]} />
+              </View>
+            </View>
           ) : healthInsights ? (
-            <Text style={[styles.insightsText, { color: colors.text }]}>
-              {healthInsights}
-            </Text>
+            <View style={styles.insightsContent}>
+              {parseHealthInsights(healthInsights)?.map((section, sectionIndex) => (
+                <View key={sectionIndex} style={styles.insightSection}>
+                  <View style={styles.sectionHeader}>
+                    {section.type === 'nutrition' && <Target size={18} color={colors.success} />}
+                    {section.type === 'exercise' && <Zap size={18} color={colors.warning} />}
+                    {section.type === 'sleep' && <Clock size={18} color={colors.info} />}
+                    {section.type === 'goals' && <TrendingUp size={18} color={colors.primary} />}
+                    {section.type === 'general' && <Lightbulb size={18} color={colors.primary} />}
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                      {section.title}
+                    </Text>
+                  </View>
+
+                  {section.items.map((item, itemIndex) => (
+                    <View key={itemIndex} style={styles.insightItem}>
+                      <View style={[styles.insightBullet, { backgroundColor: colors.primary }]} />
+                      <Text style={[styles.insightText, { color: colors.text }]}>
+                        {item}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ))}
+
+              <View style={[styles.insightsFooter, { borderTopColor: colors.border }]}>
+                <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+                  💡 Insights updated based on your latest health data
+                </Text>
+              </View>
+            </View>
           ) : (
-            <Text style={[styles.insightsText, { color: colors.textSecondary }]}>
-              Pull down to refresh and load your personalized health insights.
-            </Text>
+            <View style={styles.emptyInsights}>
+              <View style={[styles.emptyInsightsIcon, { backgroundColor: colors.textSecondary + '20' }]}>
+                <Brain size={32} color={colors.textSecondary} />
+              </View>
+              <Text style={[styles.emptyInsightsTitle, { color: colors.text }]}>
+                No insights available
+              </Text>
+              <Text style={[styles.emptyInsightsText, { color: colors.textSecondary }]}>
+                Pull down to refresh and generate your personalized health insights
+              </Text>
+              <Pressable
+                style={[styles.generateButton, { backgroundColor: colors.primary }]}
+                onPress={loadHealthInsights}
+              >
+                <Sparkles size={16} color="white" />
+                <Text style={styles.generateButtonText}>Generate Insights</Text>
+              </Pressable>
+            </View>
           )}
         </Card>
       </ScrollView>
@@ -521,7 +661,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 100, // Extra padding to account for tab bar
   },
   title: {
     fontSize: 24,
@@ -705,6 +845,151 @@ const styles = StyleSheet.create({
   insightsText: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  insightsCard: {
+    marginBottom: 20,
+  },
+  insightsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  insightsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  aiIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  insightsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  insightsSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  refreshButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  loadingIndicator: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  loadingDots: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  loadingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  insightsContent: {
+    gap: 20,
+  },
+  insightSection: {
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  insightItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    paddingLeft: 8,
+  },
+  insightBullet: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 8,
+    marginRight: 12,
+  },
+  insightText: {
+    fontSize: 14,
+    lineHeight: 20,
+    flex: 1,
+  },
+  insightsFooter: {
+    borderTopWidth: 1,
+    paddingTop: 16,
+    marginTop: 8,
+  },
+  footerText: {
+    fontSize: 12,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  emptyInsights: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyInsightsIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyInsightsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  emptyInsightsText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+    lineHeight: 20,
+  },
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    gap: 8,
+  },
+  generateButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,

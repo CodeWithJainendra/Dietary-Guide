@@ -150,12 +150,12 @@ export default function StatsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Health Stats</Text>
+
         <View style={styles.headerRight} />
       </View>
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>Your Health Stats</Text>
+
         
         <HealthStatsCard
           profile={profile}

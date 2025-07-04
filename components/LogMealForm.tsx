@@ -1,13 +1,27 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useUserStore } from '@/store/userStore';
 import Input from './Input';
 import Button from './Button';
+import Card from './Card';
 import { MealEntry } from '@/types';
-import { Camera, Upload } from 'lucide-react-native';
+import {
+  Camera,
+  Upload,
+  Coffee,
+  Sun,
+  Moon,
+  Cookie,
+  Utensils,
+  Sparkles,
+  X,
+  Check
+} from 'lucide-react-native';
 import { analyzeFoodWithAI } from '@/utils/aiService';
+import { showFoodImagePickerOptions } from '@/utils/imageUtils';
+import { generateUUID } from '@/utils/uuid';
 
 interface LogMealFormProps {
   onSubmit: (meal: MealEntry) => void;
@@ -16,59 +30,68 @@ interface LogMealFormProps {
 export default function LogMealForm({ onSubmit }: LogMealFormProps) {
   const { colors } = useTheme();
   const profile = useUserStore((state) => state.profile);
-  
+
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [foodName, setFoodName] = useState('');
   const [quantity, setQuantity] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [errors, setErrors] = useState<{foodName?: string; quantity?: string}>({});
+
+  // Meal type configurations with icons and colors
+  const mealTypes = [
+    { key: 'breakfast', label: 'Breakfast', icon: Coffee, color: '#FF6B35' },
+    { key: 'lunch', label: 'Lunch', icon: Sun, color: '#F7931E' },
+    { key: 'dinner', label: 'Dinner', icon: Moon, color: '#4A90E2' },
+    { key: 'snack', label: 'Snack', icon: Cookie, color: '#7B68EE' },
+  ] as const;
   
   const handleImageUpload = () => {
-    Alert.alert(
-      "Add Food Photo",
-      "Choose an option",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Take Photo",
-          onPress: () => {
-            Alert.alert("Camera", "Camera functionality would be implemented here.");
-          }
-        },
-        {
-          text: "Choose from Gallery",
-          onPress: () => {
-            // For demo, we'll use a sample food image
-            setSelectedImage('https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1');
-            if (!foodName) {
-              setFoodName('Mixed Salad Bowl');
-            }
-            if (!quantity) {
-              setQuantity('1 bowl');
-            }
-          }
+    showFoodImagePickerOptions(
+      (imageUri: string) => {
+        setSelectedImage(imageUri);
+      },
+      (detectedFoodName: string, detectedQuantity: string) => {
+        // Auto-fill detected food information
+        if (!foodName) {
+          setFoodName(detectedFoodName);
         }
-      ]
+        if (!quantity) {
+          setQuantity(detectedQuantity);
+        }
+      }
     );
   };
   
+  // Validation function
+  const validateForm = () => {
+    const newErrors: {foodName?: string; quantity?: string} = {};
+
+    if (!foodName.trim()) {
+      newErrors.foodName = 'Food name is required';
+    }
+
+    if (!quantity.trim()) {
+      newErrors.quantity = 'Quantity is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async () => {
-    if (!foodName.trim() || !quantity.trim()) {
-      Alert.alert('Error', 'Please fill in the food name and quantity');
+    if (!validateForm()) {
       return;
     }
-    
+
     try {
       setIsAnalyzing(true);
-      
+
       // Analyze food with AI
       const nutrition = await analyzeFoodWithAI(foodName.trim(), quantity.trim());
-      
+
       const meal: MealEntry = {
-        id: Date.now().toString(),
+        id: generateUUID(),
         userId: profile?.userId || 'current-user',
         date: new Date().toISOString().split('T')[0],
         mealType,
@@ -89,16 +112,17 @@ export default function LogMealForm({ onSubmit }: LogMealFormProps) {
         timestamp: Date.now(),
         imageUrl: selectedImage || undefined
       };
-      
+
       onSubmit(meal);
-      
+
       // Reset form
       setFoodName('');
       setQuantity('');
       setSelectedImage(null);
-      
+      setErrors({});
+
       Alert.alert(
-        'Meal Logged! 🎉', 
+        'Meal Logged! 🎉',
         `${nutrition.foodName} (${nutrition.calories} calories) has been added to your ${mealType}.`
       );
     } catch (error) {
@@ -111,179 +135,670 @@ export default function LogMealForm({ onSubmit }: LogMealFormProps) {
   
   return (
     <View style={styles.container}>
-      <Text style={[styles.title, { color: colors.text }]}>Log Your Meal</Text>
-      
-      {/* Meal Type Selection */}
-      <View style={styles.mealTypeContainer}>
-        <Text style={[styles.label, { color: colors.text }]}>Meal Type</Text>
-        <View style={styles.mealTypeButtons}>
-          {(['breakfast', 'lunch', 'dinner', 'snack'] as const).map((type) => (
-            <TouchableOpacity
-              key={type}
-              style={[
-                styles.mealTypeButton,
-                { 
-                  backgroundColor: mealType === type ? colors.primary : colors.card,
-                  borderColor: colors.border
-                }
-              ]}
-              onPress={() => setMealType(type)}
-            >
-              <Text style={[
-                styles.mealTypeText,
-                { 
-                  color: mealType === type ? 'white' : colors.text 
-                }
-              ]}>
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {/* Progress Indicator */}
+      <View style={[styles.progressHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={styles.progressContent}>
+          <View style={styles.progressSteps}>
+            <View style={[styles.progressStep, { backgroundColor: colors.primary }]}>
+              <Text style={styles.progressStepText}>1</Text>
+            </View>
+            <View style={[styles.progressLine, { backgroundColor: colors.border }]} />
+            <View style={[styles.progressStep, { backgroundColor: colors.border }]}>
+              <Text style={[styles.progressStepText, { color: colors.textSecondary }]}>2</Text>
+            </View>
+            <View style={[styles.progressLine, { backgroundColor: colors.border }]} />
+            <View style={[styles.progressStep, { backgroundColor: colors.border }]}>
+              <Text style={[styles.progressStepText, { color: colors.textSecondary }]}>3</Text>
+            </View>
+          </View>
+          <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
+            Step 1 of 3: Select meal type
+          </Text>
         </View>
       </View>
-      
+
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={true}
+        contentContainerStyle={styles.scrollContent}
+        indicatorStyle={colors.text === '#000000' ? 'black' : 'white'}
+      >
+        {/* Scroll Hint */}
+        <View style={[styles.scrollHint, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
+          <Text style={[styles.scrollHintText, { color: colors.primary }]}>
+            💡 Scroll down to complete all steps
+          </Text>
+        </View>
+
+      {/* Meal Type Selection */}
+      <Card style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleContainer}>
+            <View style={[styles.sectionIcon, { backgroundColor: colors.primary + '15' }]}>
+              <Utensils size={18} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Select Meal Type
+              </Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                Choose when you had this meal
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.stepBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.stepBadgeText}>1</Text>
+          </View>
+        </View>
+        <View style={styles.mealTypeGrid}>
+          {mealTypes.map((type) => {
+            const IconComponent = type.icon;
+            const isSelected = mealType === type.key;
+
+            return (
+              <TouchableOpacity
+                key={type.key}
+                style={[
+                  styles.mealTypeCard,
+                  {
+                    backgroundColor: isSelected ? type.color + '15' : colors.background,
+                    borderColor: isSelected ? type.color : colors.border,
+                    borderWidth: isSelected ? 2 : 1,
+                  }
+                ]}
+                onPress={() => setMealType(type.key)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.mealTypeIconContainer,
+                  { backgroundColor: isSelected ? type.color : colors.card }
+                ]}>
+                  <IconComponent
+                    size={22}
+                    color={isSelected ? 'white' : type.color}
+                  />
+                </View>
+                <Text style={[
+                  styles.mealTypeLabel,
+                  {
+                    color: isSelected ? type.color : colors.text,
+                    fontWeight: isSelected ? '600' : '500'
+                  }
+                ]}>
+                  {type.label}
+                </Text>
+                {isSelected && (
+                  <View style={[styles.selectedIndicator, { backgroundColor: type.color }]}>
+                    <Check size={10} color="white" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </Card>
+
       {/* Image Upload */}
-      <View style={styles.imageSection}>
-        <Text style={[styles.label, { color: colors.text }]}>Food Photo (Optional)</Text>
+      <Card style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleContainer}>
+            <View style={[styles.sectionIcon, { backgroundColor: colors.primary + '15' }]}>
+              <Camera size={18} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Food Photo
+              </Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                Optional - helps AI analyze better
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.stepBadge, { backgroundColor: colors.textSecondary }]}>
+            <Text style={styles.stepBadgeText}>2</Text>
+          </View>
+        </View>
         {selectedImage ? (
           <View style={styles.imageContainer}>
             <Image source={{ uri: selectedImage }} style={styles.foodImage} />
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.changeImageButton, { backgroundColor: colors.primary }]}
               onPress={handleImageUpload}
+              activeOpacity={0.8}
             >
               <Camera size={16} color="white" />
               <Text style={styles.changeImageText}>Change</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.removeImageButton, { backgroundColor: colors.error }]}
+              onPress={() => setSelectedImage(null)}
+              activeOpacity={0.8}
+            >
+              <X size={16} color="white" />
+            </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity 
-            style={[styles.uploadButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+          <TouchableOpacity
+            style={[styles.uploadButton, { borderColor: colors.primary + '40', backgroundColor: colors.primary + '08' }]}
             onPress={handleImageUpload}
+            activeOpacity={0.7}
           >
-            <Upload size={24} color={colors.primary} />
+            <View style={[styles.uploadIconContainer, { backgroundColor: colors.primary + '15' }]}>
+              <Upload size={24} color={colors.primary} />
+            </View>
             <Text style={[styles.uploadText, { color: colors.primary }]}>Add Photo</Text>
+            <Text style={[styles.uploadSubtext, { color: colors.textSecondary }]}>
+              Help AI analyze your food better
+            </Text>
           </TouchableOpacity>
         )}
-      </View>
-      
-      <Input
-        label="Food Name"
-        value={foodName}
-        onChangeText={setFoodName}
-        placeholder="e.g., Grilled chicken breast, Apple, Pasta with tomato sauce"
-      />
-      
-      <Input
-        label="Quantity"
-        value={quantity}
-        onChangeText={setQuantity}
-        placeholder="e.g., 1 cup, 150g, 1 medium, 2 slices"
-      />
-      
-      <View style={[styles.aiNote, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
-        <Text style={[styles.aiNoteText, { color: colors.primary }]}>
-          🤖 Our AI will automatically calculate calories, protein, carbs, and fat for you!
-        </Text>
-      </View>
-      
-      <Button
-        title={isAnalyzing ? "Analyzing nutrition..." : "Log Meal"}
-        onPress={handleSubmit}
-        isLoading={isAnalyzing}
-        style={styles.submitButton}
-      />
+      </Card>
+
+      {/* Food Details */}
+      <Card style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleContainer}>
+            <View style={[styles.sectionIcon, { backgroundColor: colors.primary + '15' }]}>
+              <Utensils size={18} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Food Details
+              </Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                Tell us what you ate and how much
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.stepBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.stepBadgeText}>3</Text>
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={[styles.inputGroupLabel, { color: colors.text }]}>
+            What did you eat?
+          </Text>
+          <Input
+            label=""
+            value={foodName}
+            onChangeText={(text) => {
+              setFoodName(text);
+              if (errors.foodName) setErrors(prev => ({ ...prev, foodName: undefined }));
+            }}
+            placeholder="e.g., Grilled chicken breast, Apple, Pasta with tomato sauce"
+            error={errors.foodName}
+            leftIcon={<Utensils size={20} color={colors.textSecondary} />}
+            style={[styles.input, styles.enhancedInput]}
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={[styles.inputGroupLabel, { color: colors.text }]}>
+            How much did you eat?
+          </Text>
+          <Input
+            label=""
+            value={quantity}
+            onChangeText={(text) => {
+              setQuantity(text);
+              if (errors.quantity) setErrors(prev => ({ ...prev, quantity: undefined }));
+            }}
+            placeholder="e.g., 1 cup, 150g, 1 medium, 2 slices"
+            error={errors.quantity}
+            leftIcon={<Utensils size={20} color={colors.textSecondary} />}
+            style={[styles.input, styles.enhancedInput]}
+          />
+
+          {/* Quick quantity suggestions */}
+          <View style={styles.quickSuggestions}>
+            <Text style={[styles.quickSuggestionsLabel, { color: colors.textSecondary }]}>
+              Quick suggestions:
+            </Text>
+            <View style={styles.suggestionTags}>
+              {['1 cup', '100g', '1 medium', '2 slices', '1 tbsp'].map((suggestion) => (
+                <TouchableOpacity
+                  key={suggestion}
+                  style={[styles.suggestionTag, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => setQuantity(suggestion)}
+                >
+                  <Text style={[styles.suggestionTagText, { color: colors.textSecondary }]}>
+                    {suggestion}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Card>
+
+      {/* AI Note */}
+      <Card style={[
+        styles.aiNoteCard,
+        {
+          backgroundColor: colors.primary + '08',
+          borderColor: colors.primary + '20'
+        }
+      ]}>
+        <View style={styles.aiNoteContent}>
+          <View style={[styles.aiIcon, { backgroundColor: colors.primary + '15' }]}>
+            <Sparkles size={24} color={colors.primary} />
+          </View>
+          <View style={styles.aiTextContainer}>
+            <Text style={[styles.aiNoteTitle, { color: colors.primary }]}>
+              AI-Powered Analysis
+            </Text>
+            <Text style={[styles.aiNoteText, { color: colors.textSecondary }]}>
+              Our AI will automatically calculate calories, protein, carbs, and fat for you!
+            </Text>
+          </View>
+        </View>
+      </Card>
+
+        {/* Submit Section */}
+        <Card style={[
+          styles.submitCard,
+          {
+            backgroundColor: colors.primary + '05',
+            borderColor: colors.primary + '20'
+          }
+        ]}>
+          <View style={styles.submitHeader}>
+            <View style={styles.sectionTitleContainer}>
+              <View style={[styles.sectionIcon, { backgroundColor: colors.primary + '15' }]}>
+                <Check size={18} color={colors.primary} />
+              </View>
+              <View>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Ready to Log
+                </Text>
+                <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                  {isAnalyzing ? 'Analyzing your meal...' : 'Tap to save your meal entry'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <Button
+            title={isAnalyzing ? "Analyzing nutrition..." : "Log Meal & Get Analysis"}
+            onPress={handleSubmit}
+            isLoading={isAnalyzing}
+            disabled={isAnalyzing || !foodName.trim() || !quantity.trim()}
+            style={[
+              styles.submitButton,
+              {
+                opacity: (!foodName.trim() || !quantity.trim()) ? 0.6 : 1
+              }
+            ]}
+            leftIcon={!isAnalyzing ? <Sparkles size={20} color="white" /> : undefined}
+          />
+
+          {(!foodName.trim() || !quantity.trim()) && (
+            <Text style={[styles.submitHint, { color: colors.textSecondary }]}>
+              Please fill in food name and quantity to continue
+            </Text>
+          )}
+        </Card>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
+    flex: 1,
+    backgroundColor: 'transparent',
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+
+  // Progress Header Styles
+  progressHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
-  mealTypeContainer: {
-    marginBottom: 20,
+  progressContent: {
+    alignItems: 'center',
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '500',
+  progressSteps: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  mealTypeButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  progressStep: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  mealTypeButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
+  progressStepText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
   },
-  mealTypeText: {
-    fontSize: 14,
+  progressLine: {
+    width: 40,
+    height: 2,
+    marginHorizontal: 8,
+  },
+  progressLabel: {
+    fontSize: 12,
     fontWeight: '500',
   },
-  imageSection: {
+
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+
+  // Scroll Hint Styles
+  scrollHint: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  scrollHintText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+
+  // Header Styles
+  headerCard: {
+    marginBottom: 24,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F0F8FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 20,
+  },
+  headerText: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+
+  // Section Styles
+  sectionCard: {
     marginBottom: 20,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  sectionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  stepBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
+  },
+
+  // Meal Type Styles - 2x2 Grid
+  mealTypeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  mealTypeCard: {
+    width: '48%', // Ensures exactly 2 cards per row (48% + 48% + 4% gap = 100%)
+    aspectRatio: 1, // Makes it square for perfect 2x2 grid
+    padding: 16,
+    borderRadius: 20,
+    alignItems: 'center',
+    position: 'relative',
+    justifyContent: 'center',
+    marginBottom: 12, // Vertical spacing between rows
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  mealTypeIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  mealTypeLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  selectedIndicator: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Image Upload Styles
   imageContainer: {
     position: 'relative',
     alignItems: 'center',
+    marginTop: 12,
   },
   foodImage: {
     width: '100%',
-    height: 200,
-    borderRadius: 12,
-    marginBottom: 8,
+    height: 240,
+    borderRadius: 20,
+    marginBottom: 12,
   },
   changeImageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 25,
     position: 'absolute',
-    bottom: 16,
-    right: 16,
+    bottom: 20,
+    right: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  removeImageButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   changeImageText: {
     color: 'white',
-    fontSize: 12,
-    marginLeft: 4,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   uploadButton: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
-    borderRadius: 12,
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    borderRadius: 20,
     borderWidth: 2,
     borderStyle: 'dashed',
+    marginTop: 12,
+    minHeight: 160,
+  },
+  uploadIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   uploadText: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 6,
   },
-  aiNote: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  aiNoteText: {
+  uploadSubtext: {
     fontSize: 14,
     textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // Input Styles
+  input: {
+    marginBottom: 20,
+  },
+  inputGroup: {
+    marginBottom: 24,
+  },
+  inputGroupLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  enhancedInput: {
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.02)',
+  },
+  quickSuggestions: {
+    marginTop: 12,
+  },
+  quickSuggestionsLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  suggestionTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  suggestionTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  suggestionTagText: {
+    fontSize: 12,
     fontWeight: '500',
   },
+
+  // AI Note Styles
+  aiNoteCard: {
+    marginBottom: 28,
+    borderWidth: 1,
+  },
+  aiNoteContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  aiIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  aiTextContainer: {
+    flex: 1,
+  },
+  aiNoteTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  aiNoteText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+
+  // Submit Section
+  submitCard: {
+    marginBottom: 20,
+    borderWidth: 1,
+  },
+  submitHeader: {
+    marginBottom: 16,
+  },
   submitButton: {
+    marginTop: 12,
+    paddingVertical: 18,
+    borderRadius: 16,
+  },
+  submitHint: {
+    fontSize: 12,
+    textAlign: 'center',
     marginTop: 8,
+    fontStyle: 'italic',
   },
 });

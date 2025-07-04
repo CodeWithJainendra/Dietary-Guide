@@ -21,7 +21,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.cyrusdemon7.dg",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "This app needs access to camera to take profile pictures.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select profile pictures."
       }
     },
     "android": {
@@ -29,6 +31,11 @@
         "foregroundImage": "./assets/images/logo-light.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -41,7 +48,8 @@
           ]
         }
       ],
-      "package": "com.cyrusdemon7.dg"
+      "package": "com.cyrusdemon7.dg",
+      "softwareKeyboardLayoutMode": "adjustResize"
     },
     "web": {
       "bundler": "metro",
@@ -51,7 +59,14 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you select a profile picture.",
+          "cameraPermission": "The app accesses your camera to let you take a profile picture."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

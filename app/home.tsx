@@ -15,6 +15,7 @@ import NutritionPlanCard from '@/components/NutritionPlanCard';
 import { MealEntry, NutritionPlan } from '@/types';
 import { generateMealPlan } from '@/utils/aiService';
 import { addToGoogleTasks, addToGoogleCalendar } from '@/utils/googleService';
+import { generateUUID } from '@/utils/uuid';
 import { PlusCircle, Calendar, MessageCircle, Home, BarChart2, User } from 'lucide-react-native';
 
 export default function HomeScreen() {
@@ -115,7 +116,7 @@ export default function HomeScreen() {
       
       // Create a sample plan (in a real app, you'd parse the AI response)
       const plan: NutritionPlan = {
-        id: Date.now().toString(),
+        id: generateUUID(),
         userId: profile.userId || 'current-user',
         date: today,
         meals: [

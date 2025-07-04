@@ -1,35 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  Switch, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
   Alert,
   TextInput,
   Platform,
   Image,
   BackHandler,
   Appearance,
-  Modal
+  Modal,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@clerk/clerk-expo';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useUserStore } from '@/store/userStore';
 import { useNutritionStore } from '@/store/nutritionStore';
-import { useChatStore } from '@/store/chatStore';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
-import { 
-  User, 
-  Moon, 
-  Sun, 
-  LogOut, 
-  ChevronRight, 
-  Calendar, 
+import {
+  User,
+  Moon,
+  Sun,
+  LogOut,
+  ChevronRight,
+  Calendar,
   CheckSquare,
   Trash2,
   RefreshCw,
@@ -45,6 +47,8 @@ import * as SecureStore from 'expo-secure-store';
 import { getGoogleProfilePhoto } from '@/utils/googleService';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import * as ImagePicker from 'expo-image-picker';
+import { showImagePickerOptions } from '@/utils/imageUtils';
 
 const defaultProfileImage = require('../../assets/images/userprofileimage.png');
 
@@ -58,10 +62,11 @@ const GOOGLE_AUTH_DISCOVERY = {
 
 export default function ProfileScreen() {
   const { theme, colors, toggleTheme, setThemeMode } = useTheme();
-  const { 
-    profile, 
-    logout, 
-    updateProfile, 
+  const { signOut } = useAuth();
+  const {
+    profile,
+    logout,
+    updateProfile,
     themePreference,
     setThemePreference,
     googleTokens,
@@ -69,13 +74,13 @@ export default function ProfileScreen() {
     calculateBMI,
     getHealthStatus
   } = useUserStore();
-  
+
   const clearNutritionData = useNutritionStore((state) => state.clearAllData);
-  const clearChatHistory = useChatStore((state) => state.clearMessages);
   
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState(profile);
   const [profileImage, setProfileImage] = useState<string | undefined>(defaultProfileImage);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   // Modal and connection state for Google Calendar/Tasks
   const [googleModalVisible, setGoogleModalVisible] = useState(false);
   const [googleModalType, setGoogleModalType] = useState<'connect' | 'disconnect'>('connect');
@@ -85,28 +90,32 @@ export default function ProfileScreen() {
   const healthStatus = getHealthStatus();
   
   useEffect(() => {
-    setProfileImage(defaultProfileImage);
-  }, []);
-  
+    // Initialize profile image
+    if (profile?.photoUrl) {
+      setProfileImage(profile.photoUrl);
+    } else {
+      setProfileImage(defaultProfileImage);
+    }
+  }, [profile?.photoUrl]);
+
   useEffect(() => {
     const fetchProfileImage = async () => {
-      if (profile?.email) {
-        // Fetch the profile from Supabase by email
+      if (profile?.email && !profile?.photoUrl) {
+        // Only fetch from Supabase if we don't already have a photoUrl
         const { data, error } = await supabase
           .from('profiles')
           .select('photoUrl')
           .eq('email', profile.email)
           .single();
         if (data && data.photoUrl) {
-          // Optionally: update the profile in Zustand store
-          // If you want to update the profile globally:
-          // useUserStore.getState().setProfile({ ...profile, photoUrl: data.photoUrl });
+          // Update the profile in Zustand store
+          updateProfile({ ...profile, photoUrl: data.photoUrl });
           setProfileImage(data.photoUrl);
         }
       }
     };
     fetchProfileImage();
-  }, [profile?.email]);
+  }, [profile?.email, profile?.photoUrl]);
   
   useEffect(() => {
     if (themePreference === 'system') {
@@ -149,15 +158,74 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await supabase.auth.signOut();
-            } catch (e) {}
-            // Remove credentials from SecureStore
-            await SecureStore.deleteItemAsync('user_email');
-            await SecureStore.deleteItemAsync('user_password');
-            logout();
-            router.replace('/splash');
-            if (Platform.OS === 'android') {
-              setTimeout(() => BackHandler.exitApp(), 1000);
+              console.log('Starting logout process...');
+
+              // 1. Sign out from Clerk (this clears Clerk session and tokens)
+              if (signOut) {
+                await signOut();
+                console.log('Clerk signOut completed');
+              }
+
+              // 2. Sign out from Supabase (if using Supabase auth)
+              try {
+                await supabase.auth.signOut();
+                console.log('Supabase signOut completed');
+              } catch (e) {
+                console.log('Supabase signOut error (may be expected):', e);
+              }
+
+              // 3. Clear all stored credentials and tokens from SecureStore
+              const secureStoreKeys = [
+                'user_email',
+                'user_password',
+                // Clerk token cache keys (these are automatically managed by Clerk)
+                '__clerk_client_jwt',
+                '__clerk_session_token',
+                '__clerk_refresh_token'
+              ];
+
+              for (const key of secureStoreKeys) {
+                try {
+                  await SecureStore.deleteItemAsync(key);
+                } catch (e) {
+                  console.log(`Error clearing ${key}:`, e);
+                }
+              }
+              console.log('SecureStore cleared');
+
+              // 4. Clear AsyncStorage data
+              try {
+                await AsyncStorage.multiRemove([
+                  'user-storage', // Zustand persisted state
+                  'auth0_code_verifier',
+                  'auth0_state',
+                  'google_tokens',
+                  'nutrition-storage',
+                  'chat-storage'
+                ]);
+                console.log('AsyncStorage cleared');
+              } catch (e) {
+                console.log('AsyncStorage clear error:', e);
+              }
+
+              // 5. Clear user store state
+              logout();
+              console.log('User store cleared');
+
+              // 6. Clear nutrition data
+              clearNutritionData();
+              console.log('App data cleared');
+
+              // 7. Navigate to signin page
+              router.replace('/signin');
+              console.log('Redirected to signin');
+
+            } catch (error) {
+              console.error('Logout error:', error);
+              // Even if there's an error, try to clear local state and redirect
+              logout();
+              clearNutritionData();
+              router.replace('/signin');
             }
           },
         },
@@ -212,47 +280,125 @@ export default function ProfileScreen() {
       });
     }
   };
-  
-  const handleChangeProfilePicture = () => {
+
+
+
+  const updateProfileImage = async (imageUri: string) => {
+    try {
+      setIsUploadingImage(true);
+
+      if (!profile?.userId) {
+        throw new Error('User ID is required to update profile picture');
+      }
+
+      // For now, we'll store the image URI directly as photoURL in the database
+      // This works for both local images and URLs (sample avatars)
+      const finalImageUrl = imageUri;
+
+      // Update the database with the image URI
+      const { error } = await supabase
+        .from('profiles')
+        .update({ photoUrl: finalImageUrl })
+        .eq('userId', profile.userId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update the profile in the store
+      if (editedProfile) {
+        const updatedProfile = { ...editedProfile, photoUrl: finalImageUrl };
+        setEditedProfile(updatedProfile);
+        updateProfile(updatedProfile);
+      }
+
+      // Update the displayed image
+      setProfileImage(finalImageUrl);
+
+      Alert.alert('Success', 'Profile picture updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile image:', error);
+      Alert.alert('Error', 'Failed to update profile picture. Please try again.');
+
+      // Revert to previous image on error
+      if (profile?.photoUrl) {
+        setProfileImage(profile.photoUrl);
+      } else {
+        setProfileImage(theme === 'dark' ? require('../../assets/images/userprofileimagewhite.png') : defaultProfileImage);
+      }
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+
+
+  const removeProfileImageHandler = async () => {
+    try {
+      setIsUploadingImage(true);
+
+      if (!profile?.userId) {
+        throw new Error('User ID is required to remove profile picture');
+      }
+
+      // Remove photoUrl from database
+      const { error } = await supabase
+        .from('profiles')
+        .update({ photoUrl: null })
+        .eq('userId', profile.userId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update the profile in the store
+      if (editedProfile) {
+        const updatedProfile = { ...editedProfile, photoUrl: undefined };
+        setEditedProfile(updatedProfile);
+        updateProfile(updatedProfile);
+      }
+
+      // Reset to default image after successful removal
+      const defaultImg = theme === 'dark' ? require('../../assets/images/userprofileimagewhite.png') : defaultProfileImage;
+      setProfileImage(defaultImg);
+
+      Alert.alert('Success', 'Profile picture removed successfully!');
+    } catch (error) {
+      console.error('Error removing profile image:', error);
+      Alert.alert('Error', 'Failed to remove profile picture. Please try again.');
+
+      // Revert to previous image on error
+      if (profile?.photoUrl) {
+        setProfileImage(profile.photoUrl);
+      }
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleChangeProfilePicture = async () => {
+    showImagePickerOptions(
+      (imageUri: string) => {
+        updateProfileImage(imageUri);
+      },
+      true // Include sample avatars
+    );
+
+
+
+    // Add remove option if user has a custom profile image
+    if (profile?.photoUrl) {
+      options.push({
+        text: "Remove Photo",
+        onPress: removeProfileImageHandler,
+        style: "destructive" as const
+      });
+    }
+
     Alert.alert(
       "Change Profile Picture",
       "Choose an option",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Take Photo",
-          onPress: () => {
-            // In a real app, this would open the camera
-            Alert.alert("Camera", "This would open the camera in a real app.");
-          }
-        },
-        {
-          text: "Choose from Library",
-          onPress: () => {
-            // In a real app, this would open the image picker
-            Alert.alert("Image Picker", "This would open the image picker in a real app.");
-          }
-        },
-        {
-          text: "Use Sample Avatar",
-          onPress: () => {
-            // Set a random avatar from Unsplash
-            const avatars = [
-              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=1780&auto=format&fit=crop',
-              'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=1887&auto=format&fit=crop',
-              'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=1887&auto=format&fit=crop',
-              'https://images.unsplash.com/photo-1580489944761-15a19d654956?q=80&w=1961&auto=format&fit=crop',
-              'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1770&auto=format&fit=crop'
-            ];
-            
-            const randomAvatar = avatars[Math.floor(Math.random() * avatars.length)];
-            setProfileImage(randomAvatar);
-          }
-        }
-      ]
+      options
     );
   };
   
@@ -333,13 +479,15 @@ export default function ProfileScreen() {
   };
   
   useEffect(() => {
-    // Theme-based profile image logic
-    if (theme === 'dark') {
-      setProfileImage(require('../../assets/images/userprofileimagewhite.png'));
-    } else {
-      setProfileImage(defaultProfileImage);
+    // Theme-based profile image logic - only apply if no custom profile image
+    if (!profile?.photoUrl) {
+      if (theme === 'dark') {
+        setProfileImage(require('../../assets/images/userprofileimagewhite.png'));
+      } else {
+        setProfileImage(defaultProfileImage);
+      }
     }
-  }, [theme]);
+  }, [theme, profile?.photoUrl]);
   
   if (!profile) {
     return (
@@ -360,25 +508,31 @@ export default function ProfileScreen() {
   
   if (isEditing) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
-          <Text style={[styles.title, { color: colors.text }]}>Edit Profile</Text>
+
           
           <View style={styles.profileImageContainer}>
             {profileImage ? (
-              <Image 
-                source={typeof profileImage === 'string' ? { uri: profileImage } : profileImage} 
-                style={styles.profileImage} 
+              <Image
+                source={typeof profileImage === 'string' ? { uri: profileImage } : profileImage}
+                style={styles.profileImage}
               />
             ) : (
               <View style={[styles.profileImagePlaceholder, { backgroundColor: colors.card }]}>
                 <User size={40} color={colors.primary} />
               </View>
             )}
-            
-            <TouchableOpacity 
+            {isUploadingImage && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
+            )}
+
+            <TouchableOpacity
               style={[styles.changePhotoButton, { backgroundColor: colors.primary }]}
               onPress={handleChangeProfilePicture}
+              disabled={isUploadingImage}
             >
               <Camera size={16} color="white" />
             </TouchableOpacity>
@@ -397,10 +551,14 @@ export default function ProfileScreen() {
             <Input
               label="Email"
               value={editedProfile?.email || ''}
-              onChangeText={(text) => handleInputChange('email', text)}
               placeholder="your.email@example.com"
               keyboardType="email-address"
+              editable={false}
+              style={{ opacity: 0.6 }}
             />
+            <Text style={[styles.emailNote, { color: colors.textSecondary }]}>
+              Email cannot be changed for security reasons
+            </Text>
             
             <View style={styles.row}>
               <View style={styles.halfInput}>
@@ -592,21 +750,27 @@ export default function ProfileScreen() {
   }
   
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.profileImageContainer}
             onPress={handleChangeProfilePicture}
+            disabled={isUploadingImage}
           >
             {profileImage ? (
-              <Image 
-                source={typeof profileImage === 'string' ? { uri: profileImage } : profileImage} 
-                style={styles.profileImage} 
+              <Image
+                source={typeof profileImage === 'string' ? { uri: profileImage } : profileImage}
+                style={styles.profileImage}
               />
             ) : (
               <View style={[styles.avatarContainer, { backgroundColor: colors.card }]}>
                 <User size={40} color={colors.primary} />
+              </View>
+            )}
+            {isUploadingImage && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color={colors.primary} />
               </View>
             )}
             <View style={[styles.cameraIconContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -896,7 +1060,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 100, // Extra padding to account for tab bar
   },
   header: {
     alignItems: 'center',
@@ -918,6 +1082,18 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
   profileImagePlaceholder: {
     width: 100,
@@ -1120,6 +1296,12 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 16,
     marginBottom: 8,
+  },
+  emailNote: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: -8,
+    marginBottom: 16,
   },
   pickerContainer: {
     flexDirection: 'row',

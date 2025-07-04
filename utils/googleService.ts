@@ -1,4 +1,5 @@
 import { GoogleEvent, GoogleTask, GoogleTaskList } from '@/types';
+import { generateUUID } from '@/utils/uuid';
 
 // Mock function to simulate Google OAuth flow
 export async function initiateGoogleAuth() {
@@ -43,7 +44,7 @@ export async function addToGoogleCalendar(
     
     return {
       success: true,
-      eventId: 'mock-event-id-' + Date.now()
+      eventId: 'mock-event-id-' + generateUUID()
     };
   } catch (error) {
     console.error('Error adding to Google Calendar:', error);
@@ -69,7 +70,7 @@ export async function addToGoogleTasks(
     
     return {
       success: true,
-      taskId: 'mock-task-id-' + Date.now()
+      taskId: 'mock-task-id-' + generateUUID()
     };
   } catch (error) {
     console.error('Error adding to Google Tasks:', error);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Image, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Image, Modal, TextInput } from 'react-native';
 import { router, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -9,6 +9,8 @@ import { useUserStore } from '@/store/userStore';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import { Lock, User } from 'lucide-react-native';
+import { generateUUID } from '@/utils/uuid';
+import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 
 export default function AuthScreen() {
   const { colors } = useTheme();
@@ -63,7 +65,7 @@ export default function AuthScreen() {
         
         // Navigate to main app
         console.log('Navigating to main app after successful login');
-        router.replace('/(tabs)/index');
+        router.replace('/(tabs)');
       } else {
         console.log('Auth0 login failed:', result.error);
         
@@ -104,7 +106,7 @@ export default function AuthScreen() {
   const createFallbackProfile = () => {
     // Create a fallback profile for development with a unique userId
     const fallbackProfile = {
-      userId: `user-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      userId: `user-${generateUUID()}`,
       email: 'user@example.com',
       name: 'User',
       height: 170,
@@ -126,7 +128,7 @@ export default function AuthScreen() {
     setAuthenticated(true);
     
     // Navigate to main app
-    router.replace('/(tabs)/index');
+    router.replace('/(tabs)');
   };
   
   const handleSkipAuth = () => {
@@ -152,7 +154,7 @@ export default function AuthScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>🌟 Healthy Lifestyle</Text>
+
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Your personal AI nutrition companion
         </Text>
@@ -220,9 +222,9 @@ export default function AuthScreen() {
         animationType="fade"
         transparent
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        <KeyboardAvoidingWrapper
           style={styles.centeredView}
+          enableScrollView={false}
         >
           <View style={[styles.modalView, { backgroundColor: colors.card }]}> 
             <View style={styles.iconContainer}>
@@ -254,7 +256,7 @@ export default function AuthScreen() {
               <Text style={styles.buttonText}>{loading ? 'Sending...' : 'Send me the goods'}</Text>
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingWrapper>
       </Modal>
       
       <View style={styles.footer}>

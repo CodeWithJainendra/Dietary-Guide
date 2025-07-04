@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { generateUUID } from '@/utils/uuid';
 import { UserProfile, GoogleEvent, GoogleTask, GoogleTaskList } from '@/types';
 import { saveUserProfile, updateUserProfile as updateSupabaseProfile, getUserProfileFromSupabase } from '@/lib/supabase';
 
@@ -76,7 +77,7 @@ export const useUserStore = create<UserState>()(
         // If profile doesn't exist yet, create it with default values
         if (!state.profile) {
           // Generate a unique userId if not provided
-          const userId = updates.userId || `user-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+          const userId = updates.userId || `user-${generateUUID()}`;
           
           const defaultProfile: UserProfile = {
             userId: userId,

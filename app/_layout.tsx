@@ -56,54 +56,37 @@ function RootLayoutContent() {
   // Helper to select logo based on theme
   const appLogo = theme === 'dark' ? logoDark : logoLight;
   
-  // Check authentication status on mount
+  // Simplified initialization
   useEffect(() => {
-    const checkAuthStatus = async () => {
+    const initializeApp = async () => {
       try {
-        console.log('Checking auth status in _layout...');
-        
-        // Clear any stale auth state that might be causing issues
+        console.log('Initializing app in _layout...');
+
+        // Clear any stale auth state
         await AsyncStorage.removeItem('auth0_code_verifier').catch(() => {});
         await AsyncStorage.removeItem('auth0_state').catch(() => {});
-        
-        // For now, just set ready state without complex auth checks
+
+        // Set ready state
         setIsReady(true);
         SplashScreen.hideAsync().catch(() => {});
       } catch (error) {
-        console.log('Error checking auth status:', error);
+        console.log('Error initializing app:', error);
         setIsReady(true);
         SplashScreen.hideAsync().catch(() => {});
       }
     };
-    
-    // Add a slight delay to ensure stores are initialized
-    setTimeout(() => {
-      checkAuthStatus().catch((error) => {
-        console.error('Error in checkAuthStatus:', error);
-        setIsReady(true);
-        SplashScreen.hideAsync().catch(() => {});
-      });
-    }, 1000);
-  }, [setAuthenticated, updateProfile, isAuthenticatedInStore]);
+
+    // Shorter delay
+    const timer = setTimeout(initializeApp, 500);
+    return () => clearTimeout(timer);
+  }, []);
   
-  // Fetch user profile on app load if not already loaded
+  // Simplified profile fetching - let AuthGuard handle this
   useEffect(() => {
-    const tryFetchProfile = async () => {
-      // Try to get userId from persisted profile or auth0 tokens
-      let userId = profile?.id || profile?.userId;
-      if (!userId) {
-        // Try to get from auth0 tokens if available (customize as needed)
-        // Example: const idToken = useUserStore.getState().auth0.idToken;
-        // Parse userId from idToken if your app supports it
-      }
-      if (userId) {
-        await fetchProfile(userId.toString());
-      }
-    };
-    if (!profile) {
-      tryFetchProfile();
+    if (isReady && profile?.userId) {
+      console.log('Profile available:', profile.name);
     }
-  }, [profile, fetchProfile]);
+  }, [isReady, profile]);
   
   if (!isReady) {
     return (
@@ -227,6 +210,18 @@ function RootLayoutContent() {
           }}
         />
         <Stack.Screen
+          name="auth-test"
+          options={{
+            title: 'Authentication Test',
+          }}
+        />
+        <Stack.Screen
+          name="navigation-test"
+          options={{
+            title: 'Navigation Test',
+          }}
+        />
+        <Stack.Screen
           name="meal/[id]"
           options={{
             title: 'Meal Details',
@@ -239,7 +234,7 @@ function RootLayoutContent() {
           }}
         />
         <Stack.Screen name="+not-found" />
-      </Stack>
+        </Stack>
       </ClerkSupabaseProvider>
     </SafeAreaProvider>
   );

@@ -9,23 +9,25 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
 import { useSignIn, useAuth } from '@clerk/clerk-expo';
 import { useRouter, Link } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useGoogleOAuth } from '@/lib/clerk';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, UserCheck, Chrome } from 'lucide-react-native';
+import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 
 export default function SignInScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { signIn, setActive, isLoaded } = useSignIn();
   const { isSignedIn } = useAuth();
+  const { signInWithGoogle } = useGoogleOAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,10 +36,11 @@ export default function SignInScreen() {
   const [verificationCode, setVerificationCode] = useState('');
   const [pendingVerification, setPendingVerification] = useState(false);
 
-  // Redirect if already signed in
+  // Redirect if already signed in - let AuthGuard handle this
   React.useEffect(() => {
     if (isSignedIn) {
-      router.replace('/(tabs)');
+      // AuthGuard will handle the proper redirect based on onboarding status
+      console.log('User signed in, AuthGuard will handle redirect');
     }
   }, [isSignedIn]);
 
@@ -125,12 +128,23 @@ export default function SignInScreen() {
 
     try {
       setLoading(true);
-      // TODO: Implement Google OAuth with Clerk
-      // await signIn.authenticateWithRedirect({
-      //   strategy: 'oauth_google',
-      //   redirectUrl: '/(tabs)',
-      // });
-      Alert.alert('Coming Soon', 'Google sign-in will be available soon!');
+      console.log('Starting Google OAuth flow...');
+
+      const result = await signInWithGoogle();
+
+      if (result.success) {
+        console.log('Google OAuth successful!', { isNewUser: result.isNewUser });
+
+        // Navigate to main app
+        router.replace('/(tabs)');
+      } else {
+        console.error('Google OAuth failed:', result.error);
+        Alert.alert(
+          'Sign-in Failed',
+          'Unable to sign in with Google. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
     } catch (err: any) {
       console.error('Google sign-in error:', err);
       Alert.alert('Error', err.errors?.[0]?.message || 'Google sign-in failed');
@@ -141,11 +155,10 @@ export default function SignInScreen() {
 
   if (pendingVerification) {
     return (
-      <KeyboardAvoidingView
+      <KeyboardAvoidingWrapper
         style={[styles.container, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        contentContainerStyle={styles.scrollContent}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <TouchableOpacity
               onPress={() => setPendingVerification(false)}
@@ -153,7 +166,7 @@ export default function SignInScreen() {
             >
               <ArrowLeft size={24} color={colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.title, { color: colors.text }]}>Verify Your Email</Text>
+
           </View>
 
           <Card style={styles.card}>
@@ -183,17 +196,15 @@ export default function SignInScreen() {
               style={styles.button}
             />
           </Card>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingWrapper>
     );
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingWrapper
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      contentContainerStyle={styles.scrollContent}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -201,7 +212,7 @@ export default function SignInScreen() {
           >
             <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: colors.text }]}>Welcome Back</Text>
+
         </View>
 
         <Card style={styles.card}>
@@ -293,8 +304,7 @@ export default function SignInScreen() {
             </Text>
           </TouchableOpacity>
         </Card>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingWrapper>
   );
 }
 

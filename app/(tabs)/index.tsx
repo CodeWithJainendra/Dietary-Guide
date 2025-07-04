@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   RefreshControl,
   Alert,
   Platform,
   Animated,
-  Dimensions
+  Dimensions,
+  ActivityIndicator,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '@clerk/clerk-expo';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useUserStore } from '@/store/userStore';
 import { useNutritionStore } from '@/store/nutritionStore';
@@ -22,20 +26,27 @@ import MealCard from '@/components/MealCard';
 import AvatarEmoji from '@/components/AvatarEmoji';
 import { MealEntry } from '@/types';
 import { getPersonalizedGreeting, getMotivationalMessage } from '@/utils/aiService';
-import { Plus, TrendingUp, Calendar, Target, Utensils, Award } from 'lucide-react-native';
+import { Plus, TrendingUp, Calendar, Utensils, Award } from 'lucide-react-native';
+import AuthStatus from '@/components/AuthStatus';
+import AIRecommendations from '@/components/AIRecommendations';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
+  const { isSignedIn, isLoaded } = useAuth();
+  const router = useRouter();
   const profile = useUserStore((state) => state.profile);
+  const isOnboarded = useUserStore((state) => state.isOnboarded);
   const calculateBMI = useUserStore((state) => state.calculateBMI);
-  const { 
-    mealEntries, 
-    addMealEntry, 
-    avatarMood, 
-    setAvatarMood, 
-    determineAvatarMood 
+  const {
+    mealEntries,
+    addMealEntry,
+    avatarMood,
+    setAvatarMood,
+    determineAvatarMood,
+    syncMealEntries,
+    isLoading: nutritionLoading
   } = useNutritionStore();
-  
+
   const [showLogMeal, setShowLogMeal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [greeting, setGreeting] = useState('');
@@ -44,9 +55,36 @@ export default function HomeScreen() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [avatarScale] = useState(new Animated.Value(0));
   const [streakCount, setStreakCount] = useState(0);
-  
+
   const screenWidth = Dimensions.get('window').width;
   const avatarRef = useRef(null);
+
+  // Authentication check
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    if (!isSignedIn) {
+      console.log('HomeScreen: User not signed in, redirecting to signin');
+      router.replace('/signin');
+      return;
+    }
+
+    if (!isOnboarded || !profile) {
+      console.log('HomeScreen: User not onboarded, redirecting to onboarding');
+      router.replace('/onboarding');
+      return;
+    }
+  }, [isSignedIn, isLoaded, isOnboarded, profile]);
+
+  // Sync meal entries with Supabase when user is authenticated
+  useEffect(() => {
+    if (isSignedIn && profile?.userId && isOnboarded) {
+      console.log('Syncing meal entries with Supabase for user:', profile.userId);
+      syncMealEntries(profile.userId).catch(error => {
+        console.error('Failed to sync meal entries:', error);
+      });
+    }
+  }, [isSignedIn, profile?.userId, isOnboarded, syncMealEntries]);
   
   // Get today's meals
   const today = new Date().toISOString().split('T')[0];
@@ -233,25 +271,31 @@ export default function HomeScreen() {
     }, 3000);
   };
   
-  const handleLogMeal = (meal: MealEntry) => {
-    addMealEntry(meal);
-    setShowLogMeal(false);
-    
-    // Update avatar mood based on the meal logged
-    if (profile) {
-      const bmi = calculateBMI();
-      const newTotalCalories = todayCalories + meal.totalCalories;
-      const newMood = determineAvatarMood(bmi, newTotalCalories, profile.goal);
-      setAvatarMood(newMood);
-      
-      // Generate and speak a response about the meal
-      const mealResponse = `Great job logging your ${meal.mealType}! I've added ${meal.foods[0].name} to your daily nutrition.`;
-      setAvatarMessage(mealResponse);
-      setShowAvatarMessage(true);
-      
-      if (Platform.OS !== 'web') {
-        speakMessage(mealResponse);
+  const handleLogMeal = async (meal: MealEntry) => {
+    try {
+      // Add meal entry (this will also save to Supabase)
+      await addMealEntry(meal);
+      setShowLogMeal(false);
+
+      // Update avatar mood based on the meal logged
+      if (profile) {
+        const bmi = calculateBMI();
+        const newTotalCalories = todayCalories + meal.totalCalories;
+        const newMood = determineAvatarMood(bmi, newTotalCalories, profile.goal);
+        setAvatarMood(newMood);
+
+        // Generate and speak a response about the meal
+        const mealResponse = `Great job logging your ${meal.mealType}! I've added ${meal.foods[0].name} to your daily nutrition.`;
+        setAvatarMessage(mealResponse);
+        setShowAvatarMessage(true);
+
+        if (Platform.OS !== 'web') {
+          speakMessage(mealResponse);
+        }
       }
+    } catch (error) {
+      console.error('Error logging meal:', error);
+      // Could show an error message to the user here
     }
   };
   
@@ -310,10 +354,38 @@ export default function HomeScreen() {
     
     setRefreshing(false);
   };
-  
-  if (!profile) {
+
+  // Show loading while checking authentication
+  if (!isLoaded) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.emptyText, { color: colors.text, marginTop: 16 }]}>
+            Loading...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show loading if not authenticated (will redirect)
+  if (!isSignedIn || !isOnboarded) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.emptyText, { color: colors.text, marginTop: 16 }]}>
+            Redirecting...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <View style={styles.emptyContainer}>
           <Text style={[styles.emptyText, { color: colors.text }]}>
             Welcome! Please complete your profile setup to get started.
@@ -324,7 +396,7 @@ export default function HomeScreen() {
   }
   
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
@@ -332,6 +404,9 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
+        {/* Authentication Status (for debugging) */}
+        {/* {__DEV__ && <AuthStatus showDebugInfo={true} />} */}
+
         {/* Header with Avatar */}
         <View style={styles.header}>
           <View style={styles.welcomeSection}>
@@ -433,7 +508,10 @@ export default function HomeScreen() {
         <View style={styles.actionsContainer}>
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.primary }]}
-            onPress={() => setShowLogMeal(true)}
+            onPress={() => {
+              console.log('Log Meal button pressed');
+              setShowLogMeal(true);
+            }}
           >
             <Plus size={20} color="white" />
             <Text style={styles.actionButtonText}>Log Meal</Text>
@@ -473,41 +551,55 @@ export default function HomeScreen() {
               </Text>
               <Button
                 title="Log Your First Meal"
-                onPress={() => setShowLogMeal(true)}
+                onPress={() => {
+                  console.log('First meal button pressed');
+                  setShowLogMeal(true);
+                }}
                 style={styles.firstMealButton}
               />
             </View>
           )}
         </Card>
         
-        {/* Health Tip */}
-        <Card style={styles.tipCard}>
-          <View style={styles.tipHeader}>
-            <Target size={20} color={colors.success} />
-            <Text style={[styles.tipTitle, { color: colors.text }]}>Daily Tip</Text>
-          </View>
-          <Text style={[styles.tipText, { color: colors.textSecondary }]}>
-            {greeting || "Stay hydrated! Aim for 8 glasses of water throughout the day to support your metabolism and overall health. 💧"}
-          </Text>
-        </Card>
+        {/* AI Recommendations */}
+        <AIRecommendations
+          profile={profile}
+          todayCalories={todayCalories}
+          todayProtein={todayProtein}
+          todayCarbs={todayCarbs}
+          todayFat={todayFat}
+          recommendedCalories={getRecommendedCalories()}
+        />
       </ScrollView>
-      
+
+      {/* Debug Text - Remove this after testing */}
+
       {/* Log Meal Modal */}
       {showLogMeal && (
-        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+        <Modal
+          visible={showLogMeal}
+          animationType="slide"
+          presentationStyle="formSheet"
+          onRequestClose={() => {
+            console.log('Modal close requested');
+            setShowLogMeal(false);
+          }}
+        >
+          <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Log New Meal</Text>
               <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setShowLogMeal(false)}
+                style={[styles.closeButton, { backgroundColor: colors.card }]}
+                onPress={() => {
+                  console.log('Close button pressed');
+                  setShowLogMeal(false);
+                }}
               >
                 <Text style={[styles.closeButtonText, { color: colors.textSecondary }]}>✕</Text>
               </TouchableOpacity>
             </View>
             <LogMealForm onSubmit={handleLogMeal} />
-          </View>
-        </View>
+          </SafeAreaView>
+        </Modal>
       )}
     </SafeAreaView>
   );
@@ -522,7 +614,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 100, // Extra padding to account for tab bar
   },
   header: {
     alignItems: 'center',
@@ -656,54 +748,29 @@ const styles = StyleSheet.create({
   firstMealButton: {
     paddingHorizontal: 24,
   },
-  tipCard: {
-    marginBottom: 20,
-  },
-  tipHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  tipTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  tipText: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  modalContent: {
-    width: '90%',
-    maxHeight: '80%',
-    borderRadius: 16,
-    padding: 20,
+
+  modalContainer: {
+    flex: 1,
+    padding: 16,
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 10,
+    paddingHorizontal: 4,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
   },
   closeButton: {
-    padding: 8,
+    padding: 12,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   closeButtonText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   emptyContainer: {

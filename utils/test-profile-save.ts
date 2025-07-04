@@ -11,7 +11,7 @@ import { UserProfile } from '@/types';
 export async function testProfileSave(): Promise<{ success: boolean; error?: string; profile?: UserProfile }> {
   try {
     console.log('Testing profile save functionality...');
-    
+
     // Test profile data (similar to what comes from onboarding)
     const testProfile: Partial<UserProfile> = {
       userId: 'test_user_' + Date.now(), // Unique test user ID
@@ -33,10 +33,29 @@ export async function testProfileSave(): Promise<{ success: boolean; error?: str
 
     // Use the same upsert logic as the real implementation
     const { id, ...profileData } = testProfile;
-    
+
+    // Ensure all required fields have proper defaults
+    const cleanProfileData = {
+      ...profileData,
+      name: profileData.name || 'User',
+      email: profileData.email || '',
+      height: profileData.height || 170,
+      weight: profileData.weight || 70,
+      age: profileData.age || 25,
+      gender: profileData.gender || 'other',
+      goal: profileData.goal || 'healthy_lifestyle',
+      exerciseDuration: profileData.exerciseDuration || 30,
+      isSmoker: profileData.isSmoker !== undefined ? profileData.isSmoker : false,
+      diseases: profileData.diseases || [],
+      dietaryPreferences: profileData.dietaryPreferences || [],
+      dietaryRestrictions: profileData.dietaryRestrictions || [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
     const { data, error } = await supabase
       .from('profiles')
-      .upsert([profileData], { onConflict: 'userId' })
+      .upsert([cleanProfileData], { onConflict: 'userId' })
       .select()
       .single();
 
@@ -46,7 +65,7 @@ export async function testProfileSave(): Promise<{ success: boolean; error?: str
     }
 
     console.log('Test profile saved successfully:', data);
-    
+
     // Clean up test data
     await supabase
       .from('profiles')

@@ -1,8 +1,9 @@
 // lib/clerk.ts
 // Clerk authentication configuration for Expo
 
-import { ClerkProvider, useAuth, useUser } from '@clerk/clerk-expo';
+import { ClerkProvider, useAuth, useUser, useOAuth } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
+import * as Linking from 'expo-linking';
 
 // Get the publishable key from environment variables
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -35,7 +36,7 @@ const tokenCache = {
 export { publishableKey, tokenCache };
 
 // Re-export Clerk hooks for convenience
-export { ClerkProvider, useAuth, useUser };
+export { ClerkProvider, useAuth, useUser, useOAuth };
 
 // Helper function to check if user is authenticated
 export const useClerkAuth = () => {
@@ -54,9 +55,9 @@ export const useClerkAuth = () => {
 // Helper function to get user profile data
 export const useClerkProfile = () => {
   const { user } = useUser();
-  
+
   if (!user) return null;
-  
+
   return {
     id: user.id,
     email: user.primaryEmailAddress?.emailAddress,
@@ -67,4 +68,55 @@ export const useClerkProfile = () => {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
+};
+
+// OAuth helper functions
+export const useGoogleOAuth = () => {
+  const { startOAuthFlow } = useOAuth({ strategy: 'oauth_google' });
+
+  const signInWithGoogle = async () => {
+    try {
+      const { createdSessionId, signIn, signUp, setActive } = await startOAuthFlow();
+
+      if (createdSessionId) {
+        setActive!({ session: createdSessionId });
+        return { success: true, isNewUser: !!signUp };
+      } else {
+        // Use signIn or signUp for next steps such as MFA
+        return { success: false, signIn, signUp };
+      }
+    } catch (err) {
+      console.error('OAuth error', err);
+      return { success: false, error: err };
+    }
+  };
+
+  return { signInWithGoogle };
+};
+
+// Generic OAuth helper
+export const useOAuthFlow = (strategy: 'oauth_google' | 'oauth_apple' | 'oauth_facebook') => {
+  const { startOAuthFlow } = useOAuth({ strategy });
+
+  const signInWithOAuth = async () => {
+    try {
+      const { createdSessionId, signIn, signUp, setActive } = await startOAuthFlow();
+
+      if (createdSessionId) {
+        setActive!({ session: createdSessionId });
+        return {
+          success: true,
+          isNewUser: !!signUp,
+          sessionId: createdSessionId
+        };
+      } else {
+        return { success: false, signIn, signUp };
+      }
+    } catch (err) {
+      console.error(`OAuth error for ${strategy}:`, err);
+      return { success: false, error: err };
+    }
+  };
+
+  return { signInWithOAuth };
 };

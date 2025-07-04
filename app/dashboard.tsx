@@ -80,7 +80,7 @@ export default function DashboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <Text style={styles.title}>Your Dashboard</Text>
+
         
         <View style={styles.section}>
           <View style={styles.sectionHeader}>

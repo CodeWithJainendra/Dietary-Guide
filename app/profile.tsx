@@ -14,7 +14,6 @@ import { router } from 'expo-router';
 import { theme } from '@/constants/theme';
 import { useUserStore } from '@/store/userStore';
 import { useNutritionStore } from '@/store/nutritionStore';
-import { useChatStore } from '@/store/chatStore';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
@@ -36,8 +35,7 @@ import { signOut } from '@/lib/supabase';
 
 export default function ProfileScreen() {
   const { profile, updateProfile, logout } = useUserStore();
-  const clearNutritionData = useNutritionStore((state) => state.clearData);
-  const clearChatMessages = useChatStore((state) => state.clearMessages);
+  const clearNutritionData = useNutritionStore((state) => state.clearAllData);
   
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState(profile);
@@ -97,7 +95,7 @@ export default function ProfileScreen() {
   const handleClearData = () => {
     Alert.alert(
       'Clear All Data',
-      'This will delete all your meal entries, nutrition plans, and chat history. This action cannot be undone.',
+      'This will delete all your meal entries and nutrition plans. This action cannot be undone.',
       [
         {
           text: 'Cancel',
@@ -108,7 +106,6 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: () => {
             clearNutritionData();
-            clearChatMessages();
             Alert.alert('Success', 'All data has been cleared.');
           },
         },
@@ -122,7 +119,7 @@ export default function ProfileScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Your Profile</Text>
+
         <View style={styles.headerRight} />
       </View>
       

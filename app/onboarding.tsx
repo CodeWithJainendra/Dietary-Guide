@@ -8,13 +8,15 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@clerk/clerk-expo';
+import { useGoogleOAuth } from '@/lib/clerk';
+import { saveUserProfile } from '@/lib/supabase';
+import { useUserStore } from '@/store/userStore';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
@@ -29,11 +31,14 @@ import {
   Utensils,
   Globe
 } from 'lucide-react-native';
+import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 
 export default function OnboardingScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { isSignedIn } = useAuth();
+  const { signInWithGoogle } = useGoogleOAuth();
+  const { setProfile, setAuthenticated, setOnboarded } = useUserStore();
 
   // Questionnaire state
   const [step, setStep] = useState(0);
@@ -49,10 +54,14 @@ export default function OnboardingScreen() {
   const [diseases, setDiseases] = useState('');
   const [dietaryPreferences, setDietaryPreferences] = useState('');
 
+  // Loading states
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // If already signed in, redirect
   React.useEffect(() => {
     if (isSignedIn) {
-      router.replace('/(tabs)/index');
+      router.replace('/(tabs)');
     }
   }, [isSignedIn]);
 
@@ -86,8 +95,46 @@ export default function OnboardingScreen() {
   };
 
   const handleGoogleSignIn = async () => {
-    // TODO: Implement Google OAuth with Clerk
-    Alert.alert('Coming Soon', 'Google sign-in will be available soon!');
+    try {
+      setIsGoogleLoading(true);
+      console.log('Starting Google OAuth flow...');
+
+      const result = await signInWithGoogle();
+
+      if (result.success) {
+        console.log('Google OAuth successful!', { isNewUser: result.isNewUser });
+
+        // Set authentication state
+        setAuthenticated(true);
+
+        if (result.isNewUser) {
+          // New user - continue with onboarding questionnaire
+          console.log('New user detected, continuing with onboarding...');
+          setStep(1); // Move to first questionnaire step
+        } else {
+          // Existing user - redirect to main app
+          console.log('Existing user detected, redirecting to main app...');
+          setOnboarded(true);
+          router.replace('/(tabs)');
+        }
+      } else {
+        console.error('Google OAuth failed:', result.error);
+        Alert.alert(
+          'Sign-in Failed',
+          'Unable to sign in with Google. Please try again or use email sign-up.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      Alert.alert(
+        'Error',
+        'An unexpected error occurred. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const handleEmailSignUp = () => {
@@ -106,6 +153,63 @@ export default function OnboardingScreen() {
       dietaryPreferences: dietaryPreferences,
     });
     router.push(`/signup?${params.toString()}`);
+  };
+
+  const handleGoogleOnboardingComplete = async () => {
+    try {
+      setIsSubmitting(true);
+      console.log('Completing Google user onboarding...');
+
+      // Create profile data from questionnaire
+      const profileData = {
+        userId: '', // Will be set by the saveUserProfile function
+        name: name || 'User',
+        email: email || '',
+        height: parseInt(height) || 170,
+        weight: parseInt(weight) || 70,
+        age: parseInt(age) || 25,
+        gender: (gender || 'other') as 'male' | 'female' | 'other',
+        goal: (goal || 'healthy_lifestyle') as 'weight_loss' | 'weight_gain' | 'maintenance' | 'healthy_lifestyle',
+        exerciseDuration: parseInt(exerciseDuration) || 30,
+        isSmoker: isSmoker || false,
+        diseases: diseases ? diseases.split(',').map(d => d.trim()).filter(Boolean) : [],
+        dietaryPreferences: dietaryPreferences ? dietaryPreferences.split(',').map(p => p.trim()).filter(Boolean) : [],
+        dietaryRestrictions: [],
+        photoUrl: undefined,
+      };
+
+      console.log('Saving Google user profile:', profileData);
+
+      // Save profile to Supabase
+      const result = await saveUserProfile(profileData);
+
+      if (result.success) {
+        console.log('Google user profile saved successfully!');
+
+        // Update user store
+        setProfile(profileData);
+        setOnboarded(true);
+
+        // Navigate to main app
+        router.replace('/(tabs)');
+      } else {
+        console.error('Failed to save Google user profile:', result.error);
+        Alert.alert(
+          'Profile Save Failed',
+          'Unable to save your profile. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error completing Google onboarding:', error);
+      Alert.alert(
+        'Error',
+        'An unexpected error occurred. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderStep = () => {
@@ -167,23 +271,27 @@ export default function OnboardingScreen() {
               <View style={styles.halfInput}>
                 <Text style={[styles.inputLabel, { color: colors.text }]}>Gender</Text>
                 <View style={styles.genderContainer}>
-                  {['Male', 'Female', 'Other'].map((option) => (
+                  {[
+                    { value: 'male', label: 'Male' },
+                    { value: 'female', label: 'Female' },
+                    { value: 'other', label: 'Other' }
+                  ].map((option) => (
                     <TouchableOpacity
-                      key={option}
+                      key={option.value}
                       style={[
                         styles.genderOption,
-                        { 
-                          backgroundColor: gender === option ? colors.primary : colors.card,
-                          borderColor: colors.border 
+                        {
+                          backgroundColor: gender === option.value ? colors.primary : colors.card,
+                          borderColor: colors.border
                         }
                       ]}
-                      onPress={() => setGender(option)}
+                      onPress={() => setGender(option.value)}
                     >
                       <Text style={[
                         styles.genderText,
-                        { color: gender === option ? 'white' : colors.text }
+                        { color: gender === option.value ? 'white' : colors.text }
                       ]}>
-                        {option}
+                        {option.label}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -313,42 +421,64 @@ export default function OnboardingScreen() {
           <View style={styles.stepContent}>
             <Text style={[styles.stepTitle, { color: colors.text }]}>🎉 Ready to Start!</Text>
             <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-              Your personalized AI nutrition companion is ready. Choose how you'd like to sign up:
+              {isSignedIn
+                ? "Complete your profile setup to get personalized recommendations!"
+                : "Your personalized AI nutrition companion is ready. Choose how you'd like to sign up:"
+              }
             </Text>
 
-            <Card style={styles.authCard}>
-              <Button
-                title="Continue with Google"
-                onPress={handleGoogleSignIn}
-                leftIcon={<Globe size={18} color="white" />}
-                style={{...styles.authButton, backgroundColor: '#4285F4'}}
-              />
+            {isSignedIn ? (
+              // User is already signed in with Google - show complete profile button
+              <Card style={styles.authCard}>
+                <Button
+                  title={isSubmitting ? "Saving Profile..." : "Complete Setup"}
+                  onPress={handleGoogleOnboardingComplete}
+                  leftIcon={!isSubmitting ? <User size={18} color="white" /> : undefined}
+                  style={{...styles.authButton, backgroundColor: colors.primary}}
+                  disabled={isSubmitting}
+                  loading={isSubmitting}
+                />
+              </Card>
+            ) : (
+              // User is not signed in - show sign up options
+              <>
+                <Card style={styles.authCard}>
+                  <Button
+                    title={isGoogleLoading ? "Signing in..." : "Continue with Google"}
+                    onPress={handleGoogleSignIn}
+                    leftIcon={!isGoogleLoading ? <Globe size={18} color="white" /> : undefined}
+                    style={{...styles.authButton, backgroundColor: '#4285F4'}}
+                    disabled={isGoogleLoading}
+                    loading={isGoogleLoading}
+                  />
 
-              <View style={styles.divider}>
-                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-                <Text style={[styles.dividerText, { color: colors.textSecondary }]}>or</Text>
-                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-              </View>
+                  <View style={styles.divider}>
+                    <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                    <Text style={[styles.dividerText, { color: colors.textSecondary }]}>or</Text>
+                    <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                  </View>
 
-              <Button
-                title="Continue with Email"
-                onPress={handleEmailSignUp}
-                leftIcon={<Mail size={18} color="white" />}
-                style={{...styles.authButton, backgroundColor: colors.primary}}
-              />
-            </Card>
+                  <Button
+                    title="Continue with Email"
+                    onPress={handleEmailSignUp}
+                    leftIcon={<Mail size={18} color="white" />}
+                    style={{...styles.authButton, backgroundColor: colors.primary}}
+                  />
+                </Card>
 
-            <TouchableOpacity
-              onPress={() => router.push('/signin')}
-              style={styles.signInLink}
-            >
-              <Text style={[styles.signInText, { color: colors.textSecondary }]}>
-                Already have an account?{' '}
-                <Text style={{ color: colors.primary, fontWeight: '600' }}>
-                  Sign in here
-                </Text>
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => router.push('/signin')}
+                  style={styles.signInLink}
+                >
+                  <Text style={[styles.signInText, { color: colors.textSecondary }]}>
+                    Already have an account?{' '}
+                    <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                      Sign in here
+                    </Text>
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         );
 
@@ -358,11 +488,10 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingWrapper
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      contentContainerStyle={styles.scrollContent}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
             <ArrowLeft size={24} color={colors.text} />
@@ -396,8 +525,7 @@ export default function OnboardingScreen() {
             style={styles.continueButton}
           />
         )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingWrapper>
   );
 }
 

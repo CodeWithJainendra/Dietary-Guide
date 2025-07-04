@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, Alert, Platform, KeyboardAvoidingView, Linking } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, Alert, Platform, Linking } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@clerk/clerk-expo';
 import { useUserStore } from '@/store/userStore';
@@ -10,10 +10,12 @@ import Button from '@/components/Button';
 import { Picker } from '@react-native-picker/picker';
 import { Heart, Activity, Target, TrendingUp, Sparkles, Lock } from 'lucide-react-native';
 import { saveUserProfile, supabase } from '@/lib/supabase';
+import { navigationHelpers, ROUTES } from '@/utils/navigation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Modal from 'react-native-modal';
 import TextInput from 'react-native/Libraries/Components/TextInput/TextInput';
 import * as SecureStore from 'expo-secure-store';
+import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
 
 export default function IndexScreen() {
   const { colors } = useTheme();
@@ -48,10 +50,10 @@ export default function IndexScreen() {
   const [gender, setGender] = useState<'male' | 'female' | 'other'>(profile?.gender || 'other');
   
   useEffect(() => {
-    // Check if user is already authenticated and onboarded
-    const checkAuthStatus = async () => {
+    // Simple authentication check and routing
+    const handleAuthAndRouting = async () => {
       try {
-        console.log('Checking auth status in index...');
+        console.log('Checking auth in index...');
 
         // Wait for Clerk to load
         if (!isLoaded) {
@@ -59,42 +61,23 @@ export default function IndexScreen() {
           return;
         }
 
-        // If user is authenticated with Clerk and onboarded, navigate to main app
-        if (isSignedIn && isUserOnboarded && profile) {
-          console.log('User is authenticated and onboarded, navigating to main app');
-          router.replace('/(tabs)/index');
-          return;
-        }
+        console.log('Clerk loaded. isSignedIn:', isSignedIn, 'isOnboarded:', isUserOnboarded);
 
-        // If user is authenticated but not onboarded, check if they're in verification process
-        if (isSignedIn && !isUserOnboarded) {
-          // Check if user is in the middle of email verification
-          const pendingVerification = await AsyncStorage.getItem('pendingEmailVerification');
-          if (pendingVerification === 'true') {
-            console.log('User is in email verification process, not redirecting');
-            return;
-          }
+        // Use the navigation helper to handle auth flow
+        navigationHelpers.handleAuthFlow(isSignedIn, isUserOnboarded, !!profile);
 
-          console.log('User authenticated but not onboarded, redirecting to onboarding');
-          router.replace('/onboarding');
-          return;
-        }
-
-        // If no authentication, redirect to sign-in page
-        if (!isSignedIn) {
-          console.log('No authentication found, redirecting to sign-in');
-          router.replace('/signin');
-          return;
-        }
+        // Set loading to false if we reach here
+        setLoading(false);
       } catch (error) {
-        console.error('Error checking auth status:', error);
-        // Redirect to sign-in as fallback
+        console.error('Error in auth check:', error);
+        setLoading(false);
+        // Fallback to signin on error
         router.replace('/signin');
       }
     };
-    
+
     const timer = setTimeout(() => {
-      checkAuthStatus();
+      handleAuthAndRouting();
     }, 1000); // Give time for Clerk to initialize
 
     return () => clearTimeout(timer);
@@ -156,7 +139,7 @@ export default function IndexScreen() {
       }
     }
     setOnboarded(true);
-    router.replace('/(tabs)/index');
+    navigationHelpers.goToMainApp();
   };
   
   const handleBack = () => {
@@ -260,25 +243,25 @@ export default function IndexScreen() {
         const userId = data?.user?.id;
         if (userId) {
           const profilePayload = {
-            id: userId,
+            // Don't set id - let Supabase auto-generate it
             userId: userId,
             name,
             email: signupEmail,
+            created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            age: age ? parseInt(age) : null,
-            height: height ? parseInt(height) : null,
-            weight: weight ? parseInt(weight) : null,
-            gender,
-            isSmoker,
-            goal,
-            exerciseDuration: exerciseDuration ? parseInt(exerciseDuration) : null,
+            age: age ? parseInt(age) : 25,
+            height: height ? parseInt(height) : 170,
+            weight: weight ? parseInt(weight) : 70,
+            gender: gender || 'other',
+            isSmoker: isSmoker || false,
+            goal: goal || 'healthy_lifestyle',
+            exerciseDuration: exerciseDuration ? parseInt(exerciseDuration) : 30,
             diseases: diseases ? diseases.split(',').map(d => d.trim()).filter(Boolean) : [],
             dietaryPreferences: dietaryPreferences ? dietaryPreferences.split(',').map(p => p.trim()).filter(Boolean) : [],
             dietaryRestrictions: [],
             photoUrl: null,
-            auth0_id: null,
           };
-          await supabase.from('profiles').upsert([profilePayload]);
+          await supabase.from('profiles').upsert([profilePayload], { onConflict: 'userId' });
         }
         setSignupMessage('A sign-up email has been sent. Please check your inbox.');
         setShowConfirmation(true);
@@ -300,11 +283,10 @@ export default function IndexScreen() {
   
   // If user is authenticated but not onboarded, show onboarding
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingWrapper
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      contentContainerStyle={{ flexGrow: 1 }}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
           <Text style={[styles.title, { color: colors.text }]}>🌟 Healthy Lifestyle</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -603,8 +585,7 @@ export default function IndexScreen() {
             )}
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingWrapper>
   );
 }
 
