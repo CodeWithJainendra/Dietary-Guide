@@ -36,25 +36,8 @@ export default function HomeScreen() {
   const [isShowingLogMeal, setIsShowingLogMeal] = useState(false);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [greeting, setGreeting] = useState('');
   
   useEffect(() => {
-    // Set greeting based on time of day
-    const hour = new Date().getHours();
-    let newGreeting = '';
-    
-    if (hour < 12) newGreeting = 'Good morning';
-    else if (hour < 18) newGreeting = 'Good afternoon';
-    else newGreeting = 'Good evening';
-    
-    if (profile?.name) {
-      newGreeting += `, ${profile.name.split(' ')[0]}!`;
-    } else {
-      newGreeting += '!';
-    }
-    
-    setGreeting(newGreeting);
-    
     // Set avatar mood based on BMI
     const bmi = calculateBMI();
     const mood = determineAvatarMood(bmi);
@@ -231,8 +214,6 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <AvatarEmoji
             mood={avatarMood}
-            message={greeting}
-            showMessage={true}
           />
         </View>
         

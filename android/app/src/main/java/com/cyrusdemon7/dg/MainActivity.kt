@@ -1,4 +1,4 @@
-package com.cyrusdemon7.expoapp
+package com.cyrusdemon7.dg
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

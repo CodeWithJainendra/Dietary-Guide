@@ -8,26 +8,19 @@ interface AvatarEmojiProps {
   size?: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
   interactive?: boolean;
   onPress?: () => void;
-  showMessage?: boolean;
-  message?: string;
 }
 
 export default function AvatarEmoji({
   mood,
   size = 'medium',
   interactive = false,
-  onPress,
-  showMessage = false,
-  message = ''
+  onPress
 }: AvatarEmojiProps) {
   const { colors } = useTheme();
   const [animation] = useState(new Animated.Value(0));
   const [pulseAnimation] = useState(new Animated.Value(1));
   const [bounceAnimation] = useState(new Animated.Value(0));
-  const [isMessageVisible, setIsMessageVisible] = useState(showMessage);
-  const [messageOpacity] = useState(new Animated.Value(0));
   const previousMoodRef = useRef<AvatarMood>(mood);
-  const screenWidth = Dimensions.get('window').width;
   
   // Map mood to emoji
   const getMoodEmoji = (mood: AvatarMood): string => {
@@ -156,42 +149,7 @@ export default function AvatarEmoji({
     }
   }, [interactive, pulseAnimation]);
   
-  // Update message visibility when showMessage prop changes
-  useEffect(() => {
-    if (showMessage && message) {
-      setIsMessageVisible(true);
-      
-      // Fade in animation
-      Animated.timing(messageOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: Platform.OS !== 'web',
-      }).start();
-      
-      // Auto-hide message after 8 seconds
-      const timer = setTimeout(() => {
-        // Fade out animation
-        Animated.timing(messageOpacity, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: Platform.OS !== 'web',
-        }).start(() => {
-          setIsMessageVisible(false);
-        });
-      }, 8000);
-      
-      return () => clearTimeout(timer);
-    } else if (!showMessage && isMessageVisible) {
-      // Fade out animation
-      Animated.timing(messageOpacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: Platform.OS !== 'web',
-      }).start(() => {
-        setIsMessageVisible(false);
-      });
-    }
-  }, [showMessage, message, messageOpacity]);
+
   
   // Calculate styles based on props
   const emojiSize = getSize(size);
@@ -215,9 +173,6 @@ export default function AvatarEmoji({
       }
     ]
   };
-  
-  // Calculate message width based on screen size
-  const messageWidth = Math.min(300, screenWidth * 0.8);
   
   return (
     <View style={styles.container}>
@@ -244,26 +199,6 @@ export default function AvatarEmoji({
           </Text>
         </Animated.View>
       </TouchableOpacity>
-      
-      {isMessageVisible && message && (
-        <Animated.View 
-          style={[
-            styles.messageContainer, 
-            { 
-              backgroundColor: colors.card, 
-              borderColor: colors.border,
-              width: messageWidth,
-              opacity: messageOpacity,
-              top: -emojiSize - 20
-            }
-          ]}
-        >
-          <Text style={[styles.messageText, { color: colors.text }]}>
-            {message}
-          </Text>
-          <View style={[styles.messageTip, { borderBottomColor: colors.card }]} />
-        </Animated.View>
-      )}
     </View>
   );
 }
@@ -285,35 +220,5 @@ const styles = StyleSheet.create({
   },
   emoji: {
     textAlign: 'center',
-  },
-  messageContainer: {
-    position: 'absolute',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    maxWidth: 300,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    zIndex: 10,
-  },
-  messageText: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  messageTip: {
-    position: 'absolute',
-    bottom: -10,
-    alignSelf: 'center',
-    width: 0,
-    height: 0,
-    borderLeftWidth: 10,
-    borderRightWidth: 10,
-    borderBottomWidth: 10,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
   },
 });

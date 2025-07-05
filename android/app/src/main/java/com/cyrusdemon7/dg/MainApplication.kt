@@ -1,4 +1,4 @@
-package com.cyrusdemon7.expoapp
+package com.cyrusdemon7.dg
 
 import android.app.Application
 import android.content.res.Configuration

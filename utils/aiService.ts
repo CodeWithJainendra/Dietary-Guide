@@ -2,14 +2,12 @@ import { UserProfile, MealEntry, CoreMessage } from '@/types';
 
 // AI Service Configuration
 const AI_CONFIG = {
-  // OpenRouter - Primary AI service (supports multiple models)
-  openrouter: {
-    url: 'https://openrouter.ai/api/v1/chat/completions',
-    enabled: !!process.env.EXPO_PUBLIC_OPENROUTER_API_KEY,
-    apiKey: process.env.EXPO_PUBLIC_OPENROUTER_API_KEY,
-    model: process.env.EXPO_PUBLIC_OPENROUTER_MODEL || 'deepseek/deepseek-chat-v3-0324:free',
-    siteName: 'Rork AI Nutrition Companion',
-    siteUrl: 'https://github.com/CodeWithJainendra/Dietary-Guide',
+  // Google Gemini - Primary AI service (FREE)
+  gemini: {
+    url: 'https://generativelanguage.googleapis.com/v1beta/models',
+    enabled: !!process.env.EXPO_PUBLIC_GOOGLE_API_KEY,
+    apiKey: process.env.EXPO_PUBLIC_GOOGLE_API_KEY,
+    model: process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-1.5-flash',
   },
   // Fallback to OpenAI (if API key is provided)
   openai: {
@@ -18,10 +16,12 @@ const AI_CONFIG = {
     apiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
     model: 'gpt-3.5-turbo',
   },
-  // Legacy API (currently failing)
-  primary: {
-    url: 'https://toolkit.rork.com/text/llm/',
-    enabled: false, // Disabled due to 500 errors
+  // Legacy OpenRouter (deprecated)
+  openrouter: {
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    enabled: false, // Disabled in favor of Gemini
+    apiKey: null,
+    model: null,
   },
   // Local/Mock mode for development
   mock: {
@@ -29,244 +29,324 @@ const AI_CONFIG = {
   }
 };
 
-// Available OpenRouter models
-export const OPENROUTER_MODELS = {
+// Available Google Gemini models
+export const GEMINI_MODELS = {
   // Free models
   FREE: {
-    DEEPSEEK_V3_FREE: 'deepseek/deepseek-chat-v3-0324:free', // Default - Latest DeepSeek V3 (FREE)
-    GEMINI_2_FLASH_EXP: 'google/gemini-2.0-flash-exp:free',
-    LLAMA_3_1_8B: 'meta-llama/llama-3.1-8b-instruct:free',
-    MISTRAL_7B: 'mistralai/mistral-7b-instruct:free',
-    PHI_3_MINI: 'microsoft/phi-3-mini-128k-instruct:free',
+    GEMINI_1_5_FLASH: 'gemini-1.5-flash', // Default - Latest Gemini Flash (FREE)
+    GEMINI_1_5_FLASH_8B: 'gemini-1.5-flash-8b',
   },
-  // Premium models (cost-effective)
+  // Premium models
   PREMIUM: {
-    DEEPSEEK_V3: 'deepseek/deepseek-chat', // Latest DeepSeek V3 (Paid)
-    GEMINI_2_5_FLASH: 'google/gemini-2.5-flash',
-    GEMINI_2_FLASH_THINKING: 'google/gemini-2.0-flash-thinking-exp',
-    GPT_4O_MINI: 'openai/gpt-4o-mini',
-    CLAUDE_3_5_SONNET: 'anthropic/claude-3.5-sonnet',
-    GEMINI_PRO_1_5: 'google/gemini-pro-1.5',
+    GEMINI_1_5_PRO: 'gemini-1.5-pro',
+    GEMINI_1_0_PRO: 'gemini-1.0-pro',
   }
 };
 
 // Utility function to get current AI service status
 export function getAIServiceStatus() {
+  const apiKey = AI_CONFIG.gemini.apiKey;
+  const isValidFormat = apiKey?.startsWith('AIza') && apiKey.length > 30;
+
   return {
-    openrouter: AI_CONFIG.openrouter.enabled,
+    gemini: AI_CONFIG.gemini.enabled,
     openai: AI_CONFIG.openai.enabled,
-    model: AI_CONFIG.openrouter.model,
+    model: AI_CONFIG.gemini.model,
     fallbackAvailable: AI_CONFIG.mock.enabled,
-    apiKeyPresent: !!AI_CONFIG.openrouter.apiKey,
-    apiKeyFormat: AI_CONFIG.openrouter.apiKey?.substring(0, 10) + '...',
+    apiKeyPresent: !!apiKey,
+    apiKeyFormat: apiKey?.substring(0, 10) + '...',
+    apiKeyValidFormat: isValidFormat,
+    needsNewKey: !isValidFormat || !AI_CONFIG.gemini.enabled,
+    // Legacy OpenRouter status (deprecated)
+    openrouter: false,
   };
 }
 
-// Test OpenRouter connection with manual API key (for debugging)
-export async function testOpenRouterWithKey(apiKey: string): Promise<boolean> {
-  console.log('🧪 Testing OpenRouter with provided key...');
-  console.log('🔑 Key format check:', {
-    length: apiKey.length,
-    startsCorrect: apiKey.startsWith('sk-or-v1-'),
-    preview: apiKey.substring(0, 15) + '...',
-  });
+// Quick test function for Google Gemini
+export async function testGeminiConnection(): Promise<{ success: boolean; message: string; response?: string }> {
+  if (!AI_CONFIG.gemini.enabled || !AI_CONFIG.gemini.apiKey) {
+    return {
+      success: false,
+      message: 'Google Gemini API key not configured. Please add EXPO_PUBLIC_GOOGLE_API_KEY to your .env file.'
+    };
+  }
 
-  const testMessages = [
-    {
-      role: 'user' as const,
-      content: 'Hello, please respond with just "OpenRouter working!"'
-    }
-  ];
+  console.log('🧪 Testing Google Gemini connection...');
 
   try {
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://github.com/CodeWithJainendra/Dietary-Guide',
-      'X-Title': 'Rork AI Nutrition Companion',
+    const url = `${AI_CONFIG.gemini.url}/${AI_CONFIG.gemini.model}:generateContent?key=${AI_CONFIG.gemini.apiKey}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: 'Hello! Please respond with "Gemini Flash working!" and give me one healthy food tip.'
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 100,
+        }
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response content';
+      console.log('✅ Gemini test successful!');
+      console.log('🤖 AI Response:', aiResponse);
+
+      return {
+        success: true,
+        message: 'Google Gemini Flash is working perfectly!',
+        response: aiResponse
+      };
+    } else {
+      const errorText = await response.text();
+      console.error('❌ Gemini test failed:', response.status, errorText);
+
+      if (response.status === 401 || response.status === 403) {
+        return {
+          success: false,
+          message: 'API key is invalid. Please check your Google API key from https://aistudio.google.com/app/apikey'
+        };
+      }
+
+      return {
+        success: false,
+        message: `API error: ${response.status} - ${errorText}`
+      };
+    }
+  } catch (error) {
+    console.error('❌ Gemini connection error:', error);
+    return {
+      success: false,
+      message: `Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`
     };
+  }
+}
+
+// Test Google Gemini with manual API key (for debugging)
+export async function testGeminiWithKey(apiKey: string): Promise<boolean> {
+  console.log('🧪 Testing Gemini with provided key...');
+  console.log('🔑 Key format check:', {
+    length: apiKey.length,
+    startsCorrect: apiKey.startsWith('AIza'),
+    preview: apiKey.substring(0, 10) + '...',
+  });
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const body = {
-      model: 'deepseek/deepseek-chat-v3-0324:free',
-      messages: testMessages,
-      max_tokens: 50,
-      temperature: 0.1,
+      contents: [
+        {
+          parts: [
+            {
+              text: 'Hello, please respond with just "Gemini working!"'
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 50,
+      }
     };
 
-    console.log('📤 Manual test request:', {
-      url: 'https://openrouter.ai/api/v1/chat/completions',
-      headers: { ...headers, 'Authorization': `Bearer ${apiKey.substring(0, 20)}...` },
+    console.log('📤 Manual Gemini test request:', {
+      url: url.replace(apiKey, apiKey.substring(0, 10) + '...'),
       body,
     });
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch(url, {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(body),
     });
 
     if (response.ok) {
       const data = await response.json();
-      console.log('✅ Manual OpenRouter test successful!');
-      console.log('🤖 Response:', data.choices[0]?.message?.content);
+      console.log('✅ Manual Gemini test successful!');
+      console.log('🤖 Response:', data.candidates?.[0]?.content?.parts?.[0]?.text);
       return true;
     } else {
       const errorText = await response.text();
-      console.error('❌ Manual OpenRouter test failed:', response.status, response.statusText);
+      console.error('❌ Manual Gemini test failed:', response.status, response.statusText);
       console.error('📄 Error details:', errorText);
       return false;
     }
   } catch (error) {
-    console.error('❌ Manual OpenRouter connection error:', error);
+    console.error('❌ Manual Gemini connection error:', error);
     return false;
   }
 }
 
-// Test OpenRouter connection
+// Legacy function - now redirects to Gemini
 export async function testOpenRouterConnection(): Promise<boolean> {
-  if (!AI_CONFIG.openrouter.enabled) {
-    console.log('❌ OpenRouter not enabled - no API key found');
-    return false;
-  }
-
-  console.log('🧪 Testing OpenRouter connection...');
-  console.log('📊 Config:', {
-    url: AI_CONFIG.openrouter.url,
-    model: AI_CONFIG.openrouter.model,
-    keyPresent: !!AI_CONFIG.openrouter.apiKey,
-    keyLength: AI_CONFIG.openrouter.apiKey?.length,
-    keyFormat: AI_CONFIG.openrouter.apiKey?.substring(0, 15) + '...',
-    keyStartsWith: AI_CONFIG.openrouter.apiKey?.startsWith('sk-or-v1-'),
-  });
-
-  console.log('🔍 Environment check:', {
-    envKeyExists: !!process.env.EXPO_PUBLIC_OPENROUTER_API_KEY,
-    envKeyLength: process.env.EXPO_PUBLIC_OPENROUTER_API_KEY?.length,
-    envKeyStart: process.env.EXPO_PUBLIC_OPENROUTER_API_KEY?.substring(0, 15),
-  });
-
-  const testMessages = [
-    {
-      role: 'user' as const,
-      content: 'Hello, please respond with just "OpenRouter working!"'
-    }
-  ];
-
-  try {
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${AI_CONFIG.openrouter.apiKey}`,
-      'HTTP-Referer': AI_CONFIG.openrouter.siteUrl,
-      'X-Title': AI_CONFIG.openrouter.siteName,
-    };
-
-    const body = {
-      model: AI_CONFIG.openrouter.model,
-      messages: testMessages,
-      max_tokens: 50,
-      temperature: 0.1,
-    };
-
-    console.log('📤 Request headers:', {
-      ...headers,
-      'Authorization': `Bearer ${AI_CONFIG.openrouter.apiKey?.substring(0, 20)}...`,
-    });
-    console.log('📤 Request body:', body);
-
-    const response = await fetch(AI_CONFIG.openrouter.url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log('✅ OpenRouter test successful!');
-      console.log('🤖 Response:', data.choices[0]?.message?.content);
-      return true;
-    } else {
-      const errorText = await response.text();
-      console.error('❌ OpenRouter test failed:', response.status, response.statusText);
-      console.error('📄 Error details:', errorText);
-      return false;
-    }
-  } catch (error) {
-    console.error('❌ OpenRouter connection error:', error);
-    return false;
-  }
+  console.log('🔄 Redirecting to Gemini test...');
+  const result = await testGeminiConnection();
+  return result.success;
 }
 
-// Mock AI responses for development/fallback
+// Enhanced Mock AI responses for development/fallback
 const MOCK_RESPONSES = {
-  greeting: (profile: UserProfile, _mood: string) =>
-    `Hello ${profile.name}! 😊 Ready to continue your ${profile.goal.replace('_', ' ')} journey today? I'm here to help you stay motivated! 💪✨`,
+  greeting: (profile: UserProfile, _mood: string) => {
+    const goalText = profile.goal.replace('_', ' ');
+    const greetings = [
+      `Hello ${profile.name}! 😊 Ready to continue your ${goalText} journey today? I'm here to help you stay motivated! 💪✨`,
+      `Good to see you, ${profile.name}! 🌟 Let's make today count towards your ${goalText} goals! 🚀`,
+      `Hey ${profile.name}! 👋 Your dedication to ${goalText} is inspiring. What's on the agenda today? 💪`
+    ];
+    return greetings[Math.floor(Math.random() * greetings.length)];
+  },
 
-  motivation: (profile: UserProfile, _context: string) =>
-    `You're doing amazing, ${profile.name}! Every healthy choice brings you closer to your goals. Keep it up! 🌟💪`,
+  motivation: (profile: UserProfile, _context: string) => {
+    const motivations = [
+      `You're doing amazing, ${profile.name}! Every healthy choice brings you closer to your goals. Keep it up! 🌟💪`,
+      `${profile.name}, your consistency is your superpower! Small steps lead to big changes. 🚀✨`,
+      `Keep pushing forward, ${profile.name}! Your future self will thank you for the effort you're putting in today! 💪🌟`
+    ];
+    return motivations[Math.floor(Math.random() * motivations.length)];
+  },
 
-  mealPlan: (profile: UserProfile) =>
-    `Here's a balanced meal plan for your ${profile.goal.replace('_', ' ')} goal:\n\n🍳 Breakfast: Oatmeal with berries and nuts\n🥗 Lunch: Grilled chicken salad with mixed vegetables\n🍽️ Dinner: Baked salmon with quinoa and steamed broccoli\n\nStay hydrated and listen to your body's hunger cues!`,
+  mealPlan: (profile: UserProfile) => {
+    const goalText = profile.goal.replace('_', ' ');
+    if (profile.goal === 'weight_gain') {
+      return `Here's a calorie-rich meal plan for your ${goalText} goal:\n\n🍳 **Breakfast**: Oatmeal with banana, nuts, and honey + Greek yogurt\n🥗 **Lunch**: Grilled chicken with quinoa and avocado salad\n🍽️ **Dinner**: Salmon with sweet potato and steamed vegetables\n🥤 **Snacks**: Protein smoothie, nuts, and dried fruits\n\n💡 Focus on nutrient-dense, calorie-rich foods!`;
+    } else if (profile.goal === 'weight_loss') {
+      return `Here's a balanced meal plan for your ${goalText} goal:\n\n🍳 **Breakfast**: Vegetable omelet with whole grain toast\n🥗 **Lunch**: Grilled chicken salad with mixed greens\n🍽️ **Dinner**: Baked fish with roasted vegetables\n🥤 **Snacks**: Fresh fruits and herbal tea\n\n💡 Focus on portion control and nutrient density!`;
+    } else {
+      return `Here's a balanced meal plan for your ${goalText} goal:\n\n🍳 **Breakfast**: Oatmeal with berries and nuts\n🥗 **Lunch**: Grilled chicken salad with mixed vegetables\n🍽️ **Dinner**: Baked salmon with quinoa and steamed broccoli\n🥤 **Snacks**: Greek yogurt and fresh fruits\n\n💡 Stay hydrated and listen to your body's hunger cues!`;
+    }
+  },
 
-  healthInsights: (profile: UserProfile) =>
-    `Great progress on your wellness journey! Based on your profile, here are some key insights:\n\n✅ Your ${profile.goal.replace('_', ' ')} goal is achievable\n✅ ${profile.exerciseDuration} minutes of daily exercise is excellent\n✅ Stay consistent with your healthy habits\n\nKeep up the fantastic work! 🌟`,
+  healthInsights: (profile: UserProfile) => {
+    const bmi = profile.height && profile.weight
+      ? (profile.weight / Math.pow(profile.height / 100, 2)).toFixed(1)
+      : null;
 
-  foodAnalysis: (foodName: string) => ({
-    foodName: foodName,
-    calories: 200,
-    protein: 10,
-    carbs: 20,
-    fat: 8
+    return `Great progress on your wellness journey, ${profile.name}! Here are some key insights:\n\n✅ Your ${profile.goal.replace('_', ' ')} goal is achievable with consistency\n✅ ${profile.exerciseDuration} minutes of daily exercise is ${profile.exerciseDuration >= 30 ? 'excellent' : 'a good start'}\n${bmi ? `✅ Your BMI is ${bmi} - keep monitoring your progress\n` : ''}✅ Stay consistent with your healthy habits\n\n🌟 Remember: Progress, not perfection!`;
+  },
+
+  foodAnalysis: (foodName: string) => {
+    // More realistic food analysis based on common foods
+    const food = foodName.toLowerCase();
+    if (food.includes('apple')) return { foodName, calories: 95, protein: 0.5, carbs: 25, fat: 0.3 };
+    if (food.includes('banana')) return { foodName, calories: 105, protein: 1.3, carbs: 27, fat: 0.4 };
+    if (food.includes('chicken')) return { foodName, calories: 231, protein: 43.5, carbs: 0, fat: 5 };
+    if (food.includes('rice')) return { foodName, calories: 205, protein: 4.3, carbs: 45, fat: 0.4 };
+    if (food.includes('bread')) return { foodName, calories: 265, protein: 9, carbs: 49, fat: 3.2 };
+    if (food.includes('egg')) return { foodName, calories: 155, protein: 13, carbs: 1.1, fat: 11 };
+
+    // Default values
+    return { foodName, calories: 200, protein: 10, carbs: 20, fat: 8 };
+  },
+
+  recommendations: (profile?: UserProfile) => ({
+    mealSuggestion: profile?.goal === 'weight_gain'
+      ? 'Try a protein-rich smoothie with banana, peanut butter, and oats for extra calories!'
+      : 'Try a balanced breakfast with protein, healthy fats, and complex carbohydrates to start your day right!',
+    exerciseSuggestion: `Consider a ${profile?.exerciseDuration || 30}-minute workout that matches your fitness level and goals.`,
+    additionalNotes: 'Remember to stay hydrated throughout the day and listen to your body\'s hunger cues. Consistency is key!'
   }),
 
-  recommendations: () => ({
-    mealSuggestion: 'Try a balanced breakfast with protein, healthy fats, and complex carbohydrates to start your day right!',
-    exerciseSuggestion: 'Consider a 30-minute walk or light workout to boost your energy and mood.',
-    additionalNotes: 'Remember to stay hydrated throughout the day and listen to your body\'s hunger cues.'
-  })
+  chatResponse: (message: string, profile?: UserProfile) => {
+    const msg = message.toLowerCase();
+
+    if (msg.includes('food') || msg.includes('meal') || msg.includes('eat')) {
+      if (profile?.goal === 'weight_gain') {
+        return "For weight gain, focus on calorie-dense foods like nuts, avocados, whole grains, and lean proteins. Try adding healthy fats to your meals! 🥑🥜";
+      } else if (profile?.goal === 'weight_loss') {
+        return "For weight loss, prioritize lean proteins, vegetables, and whole grains. Control portions and stay hydrated! 🥗💧";
+      } else {
+        return "Focus on balanced nutrition with a variety of whole foods, lean proteins, healthy fats, and complex carbs! 🌟";
+      }
+    }
+
+    if (msg.includes('exercise') || msg.includes('workout')) {
+      return "Regular exercise is key! Start with activities you enjoy and gradually increase intensity. Even 30 minutes daily makes a difference! 💪";
+    }
+
+    if (msg.includes('motivation') || msg.includes('help')) {
+      return `You're doing great, ${profile?.name || 'there'}! Every small step counts towards your health goals. Stay consistent and be patient with yourself! 🌟`;
+    }
+
+    // Default response
+    return "I'm here to help with your nutrition and wellness journey! Feel free to ask about meals, exercise, or health tips. 😊";
+  }
 };
 
 export async function chatWithAI(messages: CoreMessage[]): Promise<string> {
-  // Try OpenRouter first (primary service)
-  if (AI_CONFIG.openrouter.enabled) {
+  // Try Google Gemini first (primary service)
+  if (AI_CONFIG.gemini.enabled) {
     try {
-      const response = await fetch(AI_CONFIG.openrouter.url, {
+      // Convert messages to Gemini format
+      const geminiContents = messages
+        .filter(msg => msg.role !== 'system') // Gemini handles system messages differently
+        .map(msg => ({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }]
+        }));
+
+      // Add system message as first user message if present
+      const systemMessage = messages.find(msg => msg.role === 'system');
+      if (systemMessage) {
+        geminiContents.unshift({
+          role: 'user',
+          parts: [{ text: `System: ${typeof systemMessage.content === 'string' ? systemMessage.content : JSON.stringify(systemMessage.content)}` }]
+        });
+      }
+
+      const url = `${AI_CONFIG.gemini.url}/${AI_CONFIG.gemini.model}:generateContent?key=${AI_CONFIG.gemini.apiKey}`;
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${AI_CONFIG.openrouter.apiKey}`,
-          'HTTP-Referer': AI_CONFIG.openrouter.siteUrl,
-          'X-Title': AI_CONFIG.openrouter.siteName,
         },
         body: JSON.stringify({
-          model: AI_CONFIG.openrouter.model,
-          messages: messages,
-          max_tokens: 150,
-          temperature: 0.7,
+          contents: geminiContents,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 500,
+          }
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        const content = data.choices[0]?.message?.content;
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (content) {
-          console.info('✅ OpenRouter AI response generated successfully');
+          console.info('✅ Google Gemini AI response generated successfully');
           return content;
         }
       } else {
         const errorText = await response.text();
-        console.warn(`OpenRouter API returned ${response.status}: ${response.statusText}`);
-        console.warn('OpenRouter Error Details:', errorText);
+        console.warn(`Gemini API returned ${response.status}: ${response.statusText}`);
+        console.warn('Gemini Error Details:', errorText);
 
-        // Check for specific 401 error
-        if (response.status === 401) {
-          console.error('🔑 OpenRouter Authentication Failed:');
-          console.error('- Check your API key in .env file');
-          console.error('- Verify key is valid at https://openrouter.ai/keys');
-          console.error('- Make sure key starts with "sk-or-v1-"');
+        // Check for specific authentication errors
+        if (response.status === 401 || response.status === 403) {
+          console.error('🔑 Google Gemini Authentication Failed:');
+          console.error('- Your API key may be expired or invalid');
+          console.error('- Get a new key at: https://aistudio.google.com/app/apikey');
+          console.error('- Make sure key starts with "AIza"');
+          console.error('- Falling back to mock responses for now');
         }
       }
     } catch (error) {
-      console.warn('OpenRouter API failed, trying fallback:', error);
+      console.warn('Gemini API failed, trying fallback:', error);
     }
   }
 
@@ -300,47 +380,25 @@ export async function chatWithAI(messages: CoreMessage[]): Promise<string> {
     }
   }
 
-  // Try primary API if enabled (currently disabled due to 500 errors)
-  if (AI_CONFIG.primary.enabled) {
-    try {
-      const response = await fetch(AI_CONFIG.primary.url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: messages
-        }),
-      });
 
-      if (response.ok) {
-        const data = await response.json();
-        return data.completion || 'Sorry, I could not generate a response.';
-      }
-    } catch (error) {
-      console.warn('Primary AI API failed, falling back to mock responses:', error);
-    }
-  }
 
-  // Fallback to mock response
-  console.info('Using mock AI response for development');
+  // Fallback to enhanced mock response
+  console.info('🤖 Using enhanced mock AI response (Gemini unavailable)');
   const userMessage = messages.find(m => m.role === 'user')?.content || '';
   const messageText = typeof userMessage === 'string' ? userMessage : '';
 
-  // Simple keyword-based mock responses
-  if (messageText.toLowerCase().includes('greeting') || messageText.toLowerCase().includes('hello')) {
-    return 'Hello! I\'m your AI wellness companion. How can I help you with your health journey today? 😊';
-  }
+  // Try to get user profile from context (if available)
+  const systemMessage = messages.find(m => m.role === 'system')?.content || '';
+  let mockProfile: Partial<UserProfile> = {};
 
-  if (messageText.toLowerCase().includes('motivation')) {
-    return 'You\'re doing great! Every healthy choice you make is a step towards your goals. Keep up the excellent work! 💪✨';
-  }
+  // Extract basic info from system message if available
+  if (systemMessage.includes('weight_gain')) mockProfile.goal = 'weight_gain';
+  if (systemMessage.includes('weight_loss')) mockProfile.goal = 'weight_loss';
+  if (systemMessage.includes('maintenance')) mockProfile.goal = 'maintenance';
+  if (systemMessage.includes('healthy_lifestyle')) mockProfile.goal = 'healthy_lifestyle';
 
-  if (messageText.toLowerCase().includes('meal plan')) {
-    return 'Here\'s a balanced meal suggestion: Focus on lean proteins, whole grains, and plenty of vegetables. Stay hydrated! 🥗';
-  }
-
-  return 'I\'m here to help with your wellness journey! While my AI service is temporarily unavailable, I can still provide basic guidance and support. 😊';
+  // Use enhanced mock response
+  return MOCK_RESPONSES.chatResponse(messageText, mockProfile as UserProfile);
 }
 
 export async function generateMealPlan(profile: UserProfile, recentMeals: MealEntry[]): Promise<string> {

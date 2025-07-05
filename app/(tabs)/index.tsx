@@ -9,7 +9,6 @@ import {
   Alert,
   Platform,
   Animated,
-  Dimensions,
   ActivityIndicator,
   Modal
 } from 'react-native';
@@ -25,10 +24,9 @@ import LogMealForm from '@/components/LogMealForm';
 import MealCard from '@/components/MealCard';
 import AvatarEmoji from '@/components/AvatarEmoji';
 import { MealEntry } from '@/types';
-import { getPersonalizedGreeting, getMotivationalMessage, testOpenRouterConnection, testOpenRouterWithKey, getAIServiceStatus } from '@/utils/aiService';
 import { Plus, TrendingUp, Calendar, Utensils, Award } from 'lucide-react-native';
-import AuthStatus from '@/components/AuthStatus';
 import AIRecommendations from '@/components/AIRecommendations';
+import AIStatusBanner from '@/components/AIStatusBanner';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -43,20 +41,15 @@ export default function HomeScreen() {
     avatarMood,
     setAvatarMood,
     determineAvatarMood,
-    syncMealEntries,
-    isLoading: nutritionLoading
+    syncMealEntries
   } = useNutritionStore();
 
   const [showLogMeal, setShowLogMeal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [greeting, setGreeting] = useState('');
-  const [showAvatarMessage, setShowAvatarMessage] = useState(true);
-  const [avatarMessage, setAvatarMessage] = useState('');
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [avatarScale] = useState(new Animated.Value(0));
   const [streakCount, setStreakCount] = useState(0);
 
-  const screenWidth = Dimensions.get('window').width;
+
   const avatarRef = useRef(null);
 
   // Authentication check - only redirect if user is not signed in
@@ -220,54 +213,16 @@ export default function HomeScreen() {
     }).start();
   }, [avatarScale]);
   
-  // Load personalized greeting
+  // Set initial avatar mood based on user data
   useEffect(() => {
-    const loadGreeting = async () => {
-      if (profile) {
-        try {
-          const personalizedGreeting = await getPersonalizedGreeting(profile, avatarMood);
-          setGreeting(personalizedGreeting);
-          setAvatarMessage(personalizedGreeting);
-          
-          // Speak the greeting on first load if on native platform
-          if (Platform.OS !== 'web' && !isSpeaking) {
-            speakMessage(personalizedGreeting);
-          }
-        } catch (error) {
-          console.error('Error loading greeting:', error);
-          const defaultGreeting = `Hello ${profile.name}! 😊 Ready to continue your wellness journey today?`;
-          setGreeting(defaultGreeting);
-          setAvatarMessage(defaultGreeting);
-          
-          // Speak the default greeting if on native platform
-          if (Platform.OS !== 'web' && !isSpeaking) {
-            speakMessage(defaultGreeting);
-          }
-        }
-      }
-    };
-    
-    loadGreeting();
-  }, [profile, avatarMood]);
-  
-  const speakMessage = (text: string) => {
-    if (Platform.OS === 'web') return;
-    
-    if (isSpeaking) {
-      // This would use Speech.stop() if expo-speech was available
+    if (profile) {
+      const bmi = calculateBMI();
+      const initialMood = determineAvatarMood(bmi, todayCalories, profile.goal);
+      setAvatarMood(initialMood);
     }
-    
-    setIsSpeaking(true);
-    
-    // Clean up text for speech (remove emojis, etc.)
-    const cleanText = text.replace(/[^\x00-\x7F]/g, "").trim();
-    
-    // This would use Speech.speak() if expo-speech was available
-    // For now, just simulate speaking
-    setTimeout(() => {
-      setIsSpeaking(false);
-    }, 3000);
-  };
+  }, [profile, todayCalories]);
+  
+
   
   const handleLogMeal = async (meal: MealEntry) => {
     try {
@@ -281,15 +236,6 @@ export default function HomeScreen() {
         const newTotalCalories = todayCalories + meal.totalCalories;
         const newMood = determineAvatarMood(bmi, newTotalCalories, profile.goal);
         setAvatarMood(newMood);
-
-        // Generate and speak a response about the meal
-        const mealResponse = `Great job logging your ${meal.mealType}! I've added ${meal.foods[0].name} to your daily nutrition.`;
-        setAvatarMessage(mealResponse);
-        setShowAvatarMessage(true);
-
-        if (Platform.OS !== 'web') {
-          speakMessage(mealResponse);
-        }
       }
     } catch (error) {
       console.error('Error logging meal:', error);
@@ -299,57 +245,28 @@ export default function HomeScreen() {
   
   const handleAvatarPress = async () => {
     if (!profile) return;
-    
-    try {
-      const context = `User has consumed ${todayCalories} calories today out of ${recommendedCalories} recommended. They have logged ${todayMeals.length} meals. Their current streak is ${streakCount} days.`;
-      const motivationalMessage = await getMotivationalMessage(profile, context);
-      setAvatarMessage(motivationalMessage);
-      setShowAvatarMessage(true);
-      
-      // Set a positive mood when user interacts
-      setAvatarMood('joyful');
-      
-      // Speak the motivational message if on native platform
-      if (Platform.OS !== 'web') {
-        speakMessage(motivationalMessage);
-      }
-    } catch (error) {
-      console.error('Error getting motivational message:', error);
-      const defaultMessage = "You're doing amazing! Keep up the great work with your health journey! 🌟💪";
-      setAvatarMessage(defaultMessage);
-      setShowAvatarMessage(true);
-      
-      // Speak the default message if on native platform
-      if (Platform.OS !== 'web') {
-        speakMessage(defaultMessage);
-      }
-    }
+
+    // Set a positive mood when user interacts
+    setAvatarMood('joyful');
+
+    // Simple feedback without messages
+    console.log('Avatar pressed - mood changed to joyful');
   };
   
   const onRefresh = async () => {
     setRefreshing(true);
-    
-    // Reload greeting and update avatar mood
+
+    // Update avatar mood based on current data
     if (profile) {
       try {
         const bmi = calculateBMI();
         const newMood = determineAvatarMood(bmi, todayCalories, profile.goal);
         setAvatarMood(newMood);
-        
-        const personalizedGreeting = await getPersonalizedGreeting(profile, newMood);
-        setGreeting(personalizedGreeting);
-        setAvatarMessage(personalizedGreeting);
-        setShowAvatarMessage(true);
-        
-        // Speak the greeting if on native platform
-        if (Platform.OS !== 'web') {
-          speakMessage(personalizedGreeting);
-        }
       } catch (error) {
         console.error('Error refreshing:', error);
       }
     }
-    
+
     setRefreshing(false);
   };
 
@@ -402,6 +319,9 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
+        {/* AI Service Status Banner */}
+        <AIStatusBanner />
+
         {/* Authentication Status (for debugging) */}
         {/* {__DEV__ && <AuthStatus showDebugInfo={true} />} */}
 
@@ -428,8 +348,6 @@ export default function HomeScreen() {
               size="xxlarge"
               interactive={true}
               onPress={handleAvatarPress}
-              showMessage={showAvatarMessage}
-              message={avatarMessage}
             />
           </Animated.View>
           
@@ -521,42 +439,6 @@ export default function HomeScreen() {
           >
             <Calendar size={20} color="white" />
             <Text style={styles.actionButtonText}>Plan Meals</Text>
-          </TouchableOpacity>
-
-          {/* Temporary AI Test Button */}
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#FF6B6B' }]}
-            onPress={async () => {
-              console.log('🧪 Testing AI Service...');
-              const status = getAIServiceStatus();
-              console.log('📊 AI Status:', status);
-
-              // Test with environment variable first
-              const envResult = await testOpenRouterConnection();
-
-              // If env test fails, try manual test with hardcoded key
-              if (!envResult) {
-                console.log('🔄 Environment test failed, trying manual test...');
-                const manualKey = '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';
-                const manualResult = await testOpenRouterWithKey(manualKey);
-
-                Alert.alert(
-                  'AI Service Test',
-                  manualResult
-                    ? '✅ Manual test worked! Check environment variables.'
-                    : '❌ Both tests failed - check API key validity',
-                  [{ text: 'OK' }]
-                );
-              } else {
-                Alert.alert(
-                  'AI Service Test',
-                  '✅ OpenRouter working perfectly!',
-                  [{ text: 'OK' }]
-                );
-              }
-            }}
-          >
-            <Text style={styles.actionButtonText}>🧪 Test AI</Text>
           </TouchableOpacity>
         </View>
         

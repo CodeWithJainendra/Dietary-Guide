@@ -1,0 +1,56 @@
+# EAS Build ignore file
+# This file specifies which files and directories should be ignored during the build upload
+
+# Development files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Documentation and markdown files
+*.md
+docs/
+README*
+
+# Test files
+__tests__/
+*.test.js
+*.test.ts
+*.test.tsx
+*.spec.js
+*.spec.ts
+*.spec.tsx
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary build files
+dist/
+build/
+.expo/
+
+# Large asset files that aren't needed for build
+# (uncomment if you have large assets that aren't required)
+# assets/videos/
+# assets/large-images/
+
+# Backup files
+*.backup
+*.bak
+app.json.backup
+package.json.backup
+
+# Git files
+.git/
+.gitignore
+
+# Environment files (if not needed for build)
+# .env.local
+# .env.development
+
+# Patches directory (if not needed)
+# patches/
