@@ -1,4 +1,5 @@
 import { UserProfile, MealEntry, CoreMessage } from '@/types';
+import { fetchMealEntries, getUserProfileFromSupabase } from '@/lib/supabase';
 
 // AI Service Configuration
 const AI_CONFIG = {
@@ -286,6 +287,265 @@ const MOCK_RESPONSES = {
     return "I'm here to help with your nutrition and wellness journey! Feel free to ask about meals, exercise, or health tips. 😊";
   }
 };
+
+// RAG (Retrieval-Augmented Generation) Functions
+// These functions retrieve user data from the database to provide context to AI responses
+
+/**
+ * Retrieve comprehensive user context from database
+ */
+export async function getUserContext(userId: string): Promise<{
+  profile: UserProfile | null;
+  recentMeals: MealEntry[];
+  mealSummary: {
+    totalMealsToday: number;
+    totalCaloriesToday: number;
+    totalProteinToday: number;
+    totalCarbsToday: number;
+    totalFatToday: number;
+    lastMealTime: string | null;
+    commonFoods: string[];
+  };
+  nutritionInsights: {
+    averageDailyCalories: number;
+    proteinIntakePattern: string;
+    mealTimingPattern: string;
+    dietaryTrends: string[];
+  };
+}> {
+  try {
+    // Get user profile
+    const profileResult = await getUserProfileFromSupabase(userId);
+    const profile = profileResult.success ? profileResult.profile || null : null;
+
+    // Get recent meals (last 7 days)
+    const today = new Date();
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const mealsResult = await fetchMealEntries(userId);
+    const allMeals = mealsResult.success ? mealsResult.data || [] : [];
+
+    // Filter recent meals
+    const recentMeals = allMeals.filter(meal =>
+      new Date(meal.timestamp) >= weekAgo
+    );
+
+    // Calculate today's nutrition
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayMeals = recentMeals.filter(meal =>
+      new Date(meal.timestamp) >= todayStart
+    );
+
+    const mealSummary = {
+      totalMealsToday: todayMeals.length,
+      totalCaloriesToday: todayMeals.reduce((sum, meal) => sum + meal.totalCalories, 0),
+      totalProteinToday: todayMeals.reduce((sum, meal) => sum + meal.totalProtein, 0),
+      totalCarbsToday: todayMeals.reduce((sum, meal) => sum + meal.totalCarbs, 0),
+      totalFatToday: todayMeals.reduce((sum, meal) => sum + meal.totalFat, 0),
+      lastMealTime: todayMeals.length > 0
+        ? new Date(Math.max(...todayMeals.map(m => m.timestamp))).toLocaleTimeString()
+        : null,
+      commonFoods: getCommonFoods(recentMeals)
+    };
+
+    // Calculate nutrition insights
+    const nutritionInsights = calculateNutritionInsights(recentMeals);
+
+    return {
+      profile,
+      recentMeals,
+      mealSummary,
+      nutritionInsights
+    };
+  } catch (error) {
+    console.error('Error retrieving user context:', error);
+    return {
+      profile: null,
+      recentMeals: [],
+      mealSummary: {
+        totalMealsToday: 0,
+        totalCaloriesToday: 0,
+        totalProteinToday: 0,
+        totalCarbsToday: 0,
+        totalFatToday: 0,
+        lastMealTime: null,
+        commonFoods: []
+      },
+      nutritionInsights: {
+        averageDailyCalories: 0,
+        proteinIntakePattern: 'insufficient data',
+        mealTimingPattern: 'irregular',
+        dietaryTrends: []
+      }
+    };
+  }
+}
+
+/**
+ * Extract common foods from recent meals
+ */
+function getCommonFoods(meals: MealEntry[]): string[] {
+  const foodCounts: { [key: string]: number } = {};
+
+  meals.forEach(meal => {
+    meal.foods.forEach(food => {
+      const foodName = food.name.toLowerCase();
+      foodCounts[foodName] = (foodCounts[foodName] || 0) + 1;
+    });
+  });
+
+  return Object.entries(foodCounts)
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 5)
+    .map(([food]) => food);
+}
+
+/**
+ * Calculate nutrition insights from meal history
+ */
+function calculateNutritionInsights(meals: MealEntry[]): {
+  averageDailyCalories: number;
+  proteinIntakePattern: string;
+  mealTimingPattern: string;
+  dietaryTrends: string[];
+} {
+  if (meals.length === 0) {
+    return {
+      averageDailyCalories: 0,
+      proteinIntakePattern: 'insufficient data',
+      mealTimingPattern: 'irregular',
+      dietaryTrends: []
+    };
+  }
+
+  // Group meals by date
+  const mealsByDate: { [date: string]: MealEntry[] } = {};
+  meals.forEach(meal => {
+    const date = new Date(meal.timestamp).toDateString();
+    if (!mealsByDate[date]) mealsByDate[date] = [];
+    mealsByDate[date].push(meal);
+  });
+
+  // Calculate average daily calories
+  const dailyCalories = Object.values(mealsByDate).map(dayMeals =>
+    dayMeals.reduce((sum, meal) => sum + meal.totalCalories, 0)
+  );
+  const averageDailyCalories = dailyCalories.reduce((sum, cal) => sum + cal, 0) / dailyCalories.length;
+
+  // Analyze protein intake pattern
+  const dailyProtein = Object.values(mealsByDate).map(dayMeals =>
+    dayMeals.reduce((sum, meal) => sum + meal.totalProtein, 0)
+  );
+  const avgProtein = dailyProtein.reduce((sum, protein) => sum + protein, 0) / dailyProtein.length;
+  const proteinIntakePattern = avgProtein > 50 ? 'adequate' : avgProtein > 30 ? 'moderate' : 'low';
+
+  // Analyze meal timing
+  const mealTimes = meals.map(meal => new Date(meal.timestamp).getHours());
+  const hasBreakfast = mealTimes.some(hour => hour >= 6 && hour <= 10);
+  const hasLunch = mealTimes.some(hour => hour >= 11 && hour <= 15);
+  const hasDinner = mealTimes.some(hour => hour >= 17 && hour <= 21);
+  const mealTimingPattern = hasBreakfast && hasLunch && hasDinner ? 'regular' : 'irregular';
+
+  // Identify dietary trends
+  const dietaryTrends: string[] = [];
+  const allFoods = meals.flatMap(meal => meal.foods.map(food => food.name.toLowerCase()));
+
+  if (allFoods.some(food => food.includes('salad') || food.includes('vegetable'))) {
+    dietaryTrends.push('vegetable-rich');
+  }
+  if (allFoods.some(food => food.includes('chicken') || food.includes('fish') || food.includes('meat'))) {
+    dietaryTrends.push('protein-focused');
+  }
+  if (allFoods.some(food => food.includes('rice') || food.includes('pasta') || food.includes('bread'))) {
+    dietaryTrends.push('carb-inclusive');
+  }
+  if (avgProtein > 60) {
+    dietaryTrends.push('high-protein');
+  }
+  if (averageDailyCalories < 1500) {
+    dietaryTrends.push('calorie-restricted');
+  }
+
+  return {
+    averageDailyCalories: Math.round(averageDailyCalories),
+    proteinIntakePattern,
+    mealTimingPattern,
+    dietaryTrends
+  };
+}
+
+/**
+ * Enhanced chat function with RAG capabilities
+ */
+export async function chatWithAIRAG(messages: CoreMessage[], userId?: string): Promise<string> {
+  let contextualMessages = [...messages];
+
+  // If userId is provided, retrieve user context and enhance the system message
+  if (userId) {
+    try {
+      const userContext = await getUserContext(userId);
+
+      // Create enhanced system message with user context
+      const contextualSystemMessage: CoreMessage = {
+        role: 'system',
+        content: `You are a personalized AI nutrition companion with access to the user's profile and meal history. Use this information to provide highly personalized, relevant advice.
+
+USER PROFILE:
+${userContext.profile ? `
+- Name: ${userContext.profile.name}
+- Age: ${userContext.profile.age}, Gender: ${userContext.profile.gender}
+- Height: ${userContext.profile.height}cm, Weight: ${userContext.profile.weight}kg
+- Goal: ${userContext.profile.goal.replace('_', ' ')}
+- Exercise: ${userContext.profile.exerciseDuration} minutes/day
+- Smoker: ${userContext.profile.isSmoker ? 'Yes' : 'No'}
+- Health conditions: ${userContext.profile.diseases?.join(', ') || 'None'}
+- Dietary preferences: ${userContext.profile.dietaryPreferences?.join(', ') || 'None'}
+- Dietary restrictions: ${userContext.profile.dietaryRestrictions?.join(', ') || 'None'}
+` : 'Profile not available'}
+
+TODAY'S NUTRITION:
+- Meals logged: ${userContext.mealSummary.totalMealsToday}
+- Total calories: ${userContext.mealSummary.totalCaloriesToday}
+- Protein: ${userContext.mealSummary.totalProteinToday.toFixed(1)}g
+- Carbs: ${userContext.mealSummary.totalCarbsToday.toFixed(1)}g
+- Fat: ${userContext.mealSummary.totalFatToday.toFixed(1)}g
+- Last meal: ${userContext.mealSummary.lastMealTime || 'No meals today'}
+
+RECENT EATING PATTERNS (Last 7 days):
+- Average daily calories: ${userContext.nutritionInsights.averageDailyCalories}
+- Protein intake: ${userContext.nutritionInsights.proteinIntakePattern}
+- Meal timing: ${userContext.nutritionInsights.mealTimingPattern}
+- Dietary trends: ${userContext.nutritionInsights.dietaryTrends.join(', ') || 'None identified'}
+- Common foods: ${userContext.mealSummary.commonFoods.join(', ') || 'None'}
+
+INSTRUCTIONS:
+1. Reference specific data from their profile and meal history in your responses
+2. Provide personalized recommendations based on their goals and current intake
+3. Address any nutritional gaps or patterns you notice
+4. Be encouraging and supportive while being specific and actionable
+5. If they ask about their progress, reference their actual data
+6. Suggest meals or adjustments based on what they typically eat
+7. Keep responses conversational but informative (max 200 words)
+
+Always be personal, specific, and reference their actual data when relevant.`
+      };
+
+      // Replace or add the system message
+      const existingSystemIndex = contextualMessages.findIndex(msg => msg.role === 'system');
+      if (existingSystemIndex >= 0) {
+        contextualMessages[existingSystemIndex] = contextualSystemMessage;
+      } else {
+        contextualMessages.unshift(contextualSystemMessage);
+      }
+
+    } catch (error) {
+      console.error('Error retrieving user context for RAG:', error);
+      // Continue with original messages if context retrieval fails
+    }
+  }
+
+  // Use the enhanced messages with the existing chatWithAI function
+  return await chatWithAI(contextualMessages);
+}
 
 export async function chatWithAI(messages: CoreMessage[]): Promise<string> {
   // Try Google Gemini first (primary service)
@@ -603,5 +863,156 @@ export async function getMotivationalMessage(profile: UserProfile, context: stri
   } catch (error) {
     console.info('Using fallback motivation due to AI service unavailability');
     return MOCK_RESPONSES.motivation(profile, context);
+  }
+}
+
+/**
+ * Convert image URI to base64 for API calls
+ */
+async function imageUriToBase64(imageUri: string): Promise<string> {
+  try {
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        // Remove the data:image/jpeg;base64, prefix
+        const base64Data = base64.split(',')[1];
+        resolve(base64Data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Error converting image to base64:', error);
+    throw new Error('Failed to process image');
+  }
+}
+
+/**
+ * Analyze food image using Google Gemini Vision API
+ */
+export async function analyzeFoodImage(imageUri: string): Promise<{
+  foodName: string;
+  quantity: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  confidence: number;
+}> {
+  if (!AI_CONFIG.gemini.enabled || !AI_CONFIG.gemini.apiKey) {
+    throw new Error('Google Gemini API is not configured');
+  }
+
+  try {
+    // Convert image to base64
+    const base64Image = await imageUriToBase64(imageUri);
+
+    const requestBody = {
+      contents: [
+        {
+          parts: [
+            {
+              text: `Analyze this food image and provide detailed nutritional information.
+
+              Please identify:
+              1. The main food item(s) in the image
+              2. Estimate the quantity/serving size
+              3. Calculate nutritional values per serving
+
+              Respond with ONLY a JSON object in this exact format:
+              {
+                "foodName": "specific food name",
+                "quantity": "estimated serving size with unit",
+                "calories": number,
+                "protein": number,
+                "carbs": number,
+                "fat": number,
+                "confidence": number (0-100, how confident you are in the identification)
+              }
+
+              Be as accurate as possible with nutritional values. If you can't identify the food clearly, set confidence to a lower value.`
+            },
+            {
+              inline_data: {
+                mime_type: "image/jpeg",
+                data: base64Image
+              }
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        topK: 32,
+        topP: 1,
+        maxOutputTokens: 1024,
+      }
+    };
+
+    const response = await fetch(
+      `${AI_CONFIG.gemini.url}/${AI_CONFIG.gemini.model}:generateContent?key=${AI_CONFIG.gemini.apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('Gemini API error:', errorData);
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+      throw new Error('Invalid response from Gemini API');
+    }
+
+    const textResponse = data.candidates[0].content.parts[0].text;
+
+    // Try to extract JSON from the response
+    const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Could not parse JSON from AI response');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // Validate the response structure
+    if (!parsed.foodName || typeof parsed.calories !== 'number') {
+      throw new Error('Invalid nutrition data structure');
+    }
+
+    return {
+      foodName: parsed.foodName || 'Unknown Food',
+      quantity: parsed.quantity || '1 serving',
+      calories: Math.round(parsed.calories) || 200,
+      protein: Math.round(parsed.protein * 10) / 10 || 10,
+      carbs: Math.round(parsed.carbs * 10) / 10 || 20,
+      fat: Math.round(parsed.fat * 10) / 10 || 8,
+      confidence: Math.round(parsed.confidence) || 50
+    };
+
+  } catch (error) {
+    console.error('Error analyzing food image:', error);
+
+    // Provide fallback response
+    return {
+      foodName: 'Unidentified Food',
+      quantity: '1 serving',
+      calories: 200,
+      protein: 10,
+      carbs: 20,
+      fat: 8,
+      confidence: 0
+    };
   }
 }

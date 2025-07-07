@@ -4,7 +4,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: ViewStyle | ViewStyle[];
 }
 
 const Card: React.FC<CardProps> = ({ children, style }) => {

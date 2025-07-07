@@ -17,7 +17,7 @@ import { useUserStore } from '@/store/userStore';
 import { useNutritionStore } from '@/store/nutritionStore';
 import ChatMessage from '@/components/ChatMessage';
 import { Message, CoreMessage } from '@/types';
-import { chatWithAI } from '@/utils/aiService';
+import { chatWithAIRAG } from '@/utils/aiService';
 import { Send, ArrowLeft, Home, MessageCircle, BarChart2, User } from 'lucide-react-native';
 import { saveChatMessage, fetchChatHistory } from '@/lib/supabase';
 import { KeyboardAvoidingWrapper } from '@/components/KeyboardAvoidingWrapper';
@@ -109,33 +109,18 @@ export default function ChatScreen() {
     try {
       setLoading(true);
       
-      // Create system prompt with user context
-      const systemPrompt = `You are a friendly, supportive nutrition and wellness AI companion. 
-      You're helping a user with the following profile:
-      - Height: ${profile?.height || 'Unknown'} cm
-      - Weight: ${profile?.weight || 'Unknown'} kg
-      - Age: ${profile?.age || 'Unknown'}
-      - Goal: ${profile?.goal === 'weight_loss' ? 'Weight Loss' : profile?.goal === 'weight_gain' ? 'Weight Gain' : 'Healthy Lifestyle'}
-      - Health conditions: ${profile?.diseases?.join(', ') || 'None'}
-      - Dietary preferences: ${profile?.dietaryPreferences?.join(', ') || 'None'}
-      
-      Provide helpful, accurate nutrition and health advice. Be conversational, friendly, and encouraging.
-      Keep responses concise (2-3 sentences max), structured, and actionable. Use bullet points when listing items.
-      Focus on practical advice and positive reinforcement. Avoid lengthy explanations unless specifically asked.
-      Always maintain a supportive and motivational tone.`;
-      
-      // Format messages for the API with proper typing
+      // Format messages for the API - RAG will add enhanced system prompt with user data
       const apiMessages: CoreMessage[] = [
-        { role: 'system', content: systemPrompt },
-        ...messages.map(msg => ({ 
-          role: msg.role as 'user' | 'assistant' | 'system', 
-          content: msg.content 
+        ...messages.map(msg => ({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content
         })) as CoreMessage[],
         { role: 'user', content: inputText }
       ];
-      
-      // Get response from AI
-      const response = await chatWithAI(apiMessages);
+
+      // Get response from AI with RAG (Retrieval-Augmented Generation)
+      // This will automatically retrieve user profile and meal data for personalized responses
+      const response = await chatWithAIRAG(apiMessages, userId);
       
       // Add AI response to chat
       const assistantMessage: Message = {
@@ -208,6 +193,14 @@ export default function ChatScreen() {
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               I can help with meal ideas, nutritional information, dietary advice, and more.
             </Text>
+
+            {/* RAG Status Indicator */}
+            <View style={[styles.ragStatusContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.ragStatusDot} />
+              <Text style={[styles.ragStatusText, { color: colors.textSecondary }]}>
+                🧠 Smart AI with access to your profile & meal data
+              </Text>
+            </View>
           </View>
         ) : (
           <FlatList
@@ -371,6 +364,26 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     textAlign: 'center',
+  },
+  ragStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  ragStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4CAF50',
+    marginRight: 8,
+  },
+  ragStatusText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   inputContainer: {
     padding: 16,

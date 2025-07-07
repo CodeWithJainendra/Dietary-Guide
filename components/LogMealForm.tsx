@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useUserStore } from '@/store/userStore';
@@ -17,9 +17,11 @@ import {
   Utensils,
   Sparkles,
   X,
-  Check
+  Check,
+  Loader2,
+  Eye
 } from 'lucide-react-native';
-import { analyzeFoodWithAI } from '@/utils/aiService';
+import { analyzeFoodWithAI, analyzeFoodImage } from '@/utils/aiService';
 import { showFoodImagePickerOptions } from '@/utils/imageUtils';
 import { generateUUID } from '@/utils/uuid';
 
@@ -31,12 +33,25 @@ export default function LogMealForm({ onSubmit }: LogMealFormProps) {
   const { colors } = useTheme();
   const profile = useUserStore((state) => state.profile);
 
+  // Animation for spinning loader
+  const spinValue = useRef(new Animated.Value(0)).current;
+
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [foodName, setFoodName] = useState('');
   const [quantity, setQuantity] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [errors, setErrors] = useState<{foodName?: string; quantity?: string}>({});
+  const [isRecognizingFood, setIsRecognizingFood] = useState(false);
+  const [recognitionResult, setRecognitionResult] = useState<{
+    foodName: string;
+    quantity: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    confidence: number;
+  } | null>(null);
 
   // Meal type configurations with icons and colors
   const mealTypes = [
@@ -45,14 +60,93 @@ export default function LogMealForm({ onSubmit }: LogMealFormProps) {
     { key: 'dinner', label: 'Dinner', icon: Moon, color: '#4A90E2' },
     { key: 'snack', label: 'Snack', icon: Cookie, color: '#7B68EE' },
   ] as const;
-  
+
+  // Spinning animation effect
+  useEffect(() => {
+    let spinAnimation: Animated.CompositeAnimation;
+
+    if (isRecognizingFood) {
+      spinAnimation = Animated.loop(
+        Animated.timing(spinValue, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        })
+      );
+      spinAnimation.start();
+    } else {
+      spinValue.setValue(0);
+    }
+
+    return () => {
+      if (spinAnimation) {
+        spinAnimation.stop();
+      }
+    };
+  }, [isRecognizingFood, spinValue]);
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const handleAIFoodRecognition = async (imageUri: string) => {
+    try {
+      setIsRecognizingFood(true);
+
+      // Analyze the food image with AI
+      const result = await analyzeFoodImage(imageUri);
+      setRecognitionResult(result);
+
+      // Auto-fill form fields if they're empty
+      if (!foodName && result.foodName !== 'Unidentified Food') {
+        setFoodName(result.foodName);
+      }
+      if (!quantity && result.quantity) {
+        setQuantity(result.quantity);
+      }
+
+      // Show recognition result to user
+      if (result.confidence > 70) {
+        Alert.alert(
+          '🎯 Food Recognized!',
+          `I detected: ${result.foodName} (${result.quantity})\nConfidence: ${result.confidence}%\n\nThe form has been auto-filled. You can edit the details if needed.`,
+          [{ text: 'OK', style: 'default' }]
+        );
+      } else if (result.confidence > 30) {
+        Alert.alert(
+          '🤔 Food Detected',
+          `I think this might be: ${result.foodName}\nConfidence: ${result.confidence}%\n\nPlease verify and edit the details as needed.`,
+          [{ text: 'OK', style: 'default' }]
+        );
+      } else {
+        Alert.alert(
+          '📷 Image Uploaded',
+          'I couldn\'t identify the food clearly. Please enter the details manually.',
+          [{ text: 'OK', style: 'default' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error recognizing food:', error);
+      Alert.alert(
+        'Recognition Failed',
+        'Could not analyze the food image. Please enter the details manually.',
+        [{ text: 'OK', style: 'default' }]
+      );
+    } finally {
+      setIsRecognizingFood(false);
+    }
+  };
+
   const handleImageUpload = () => {
     showFoodImagePickerOptions(
-      (imageUri: string) => {
+      async (imageUri: string) => {
         setSelectedImage(imageUri);
+        // Automatically trigger AI food recognition
+        await handleAIFoodRecognition(imageUri);
       },
       (detectedFoodName: string, detectedQuantity: string) => {
-        // Auto-fill detected food information
+        // Auto-fill detected food information (for sample images)
         if (!foodName) {
           setFoodName(detectedFoodName);
         }
@@ -120,6 +214,7 @@ export default function LogMealForm({ onSubmit }: LogMealFormProps) {
       setQuantity('');
       setSelectedImage(null);
       setErrors({});
+      setRecognitionResult(null);
 
       Alert.alert(
         'Meal Logged! 🎉',
@@ -261,18 +356,62 @@ export default function LogMealForm({ onSubmit }: LogMealFormProps) {
         {selectedImage ? (
           <View style={styles.imageContainer}>
             <Image source={{ uri: selectedImage }} style={styles.foodImage} />
+
+            {/* AI Recognition Loading Overlay */}
+            {isRecognizingFood && (
+              <View style={[styles.recognitionOverlay, { backgroundColor: colors.background + 'E6' }]}>
+                <View style={[styles.recognitionContent, { backgroundColor: colors.card }]}>
+                  <Animated.View style={{ transform: [{ rotate: spin }], marginBottom: 12 }}>
+                    <Loader2 size={32} color={colors.primary} />
+                  </Animated.View>
+                  <Text style={[styles.recognitionText, { color: colors.text }]}>
+                    🤖 Analyzing food...
+                  </Text>
+                  <Text style={[styles.recognitionSubtext, { color: colors.textSecondary }]}>
+                    AI is identifying your meal
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Recognition Result Badge */}
+            {recognitionResult && !isRecognizingFood && (
+              <View style={[styles.recognitionBadge, {
+                backgroundColor: recognitionResult.confidence > 70 ? colors.success + '15' :
+                                recognitionResult.confidence > 30 ? colors.warning + '15' : colors.error + '15',
+                borderColor: recognitionResult.confidence > 70 ? colors.success :
+                            recognitionResult.confidence > 30 ? colors.warning : colors.error
+              }]}>
+                <Eye size={14} color={
+                  recognitionResult.confidence > 70 ? colors.success :
+                  recognitionResult.confidence > 30 ? colors.warning : colors.error
+                } />
+                <Text style={[styles.recognitionBadgeText, {
+                  color: recognitionResult.confidence > 70 ? colors.success :
+                         recognitionResult.confidence > 30 ? colors.warning : colors.error
+                }]}>
+                  {recognitionResult.confidence}% confident
+                </Text>
+              </View>
+            )}
+
             <TouchableOpacity
               style={[styles.changeImageButton, { backgroundColor: colors.primary }]}
               onPress={handleImageUpload}
               activeOpacity={0.8}
+              disabled={isRecognizingFood}
             >
               <Camera size={16} color="white" />
               <Text style={styles.changeImageText}>Change</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.removeImageButton, { backgroundColor: colors.error }]}
-              onPress={() => setSelectedImage(null)}
+              onPress={() => {
+                setSelectedImage(null);
+                setRecognitionResult(null);
+              }}
               activeOpacity={0.8}
+              disabled={isRecognizingFood}
             >
               <X size={16} color="white" />
             </TouchableOpacity>
@@ -800,5 +939,61 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+
+  // AI Recognition Styles
+  recognitionOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  recognitionContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 32,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  recognitionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  recognitionSubtext: {
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  recognitionBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  recognitionBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });

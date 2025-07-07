@@ -17,7 +17,7 @@ import { useUserStore } from '@/store/userStore';
 import { useNutritionStore } from '@/store/nutritionStore';
 import ChatMessage from '@/components/ChatMessage';
 import { Message, CoreMessage } from '@/types';
-import { chatWithAI } from '@/utils/aiService';
+import { chatWithAIRAG } from '@/utils/aiService';
 import { Send, Sparkles } from 'lucide-react-native';
 import { saveChatMessage, fetchChatHistory } from '@/lib/supabase';
 import { generateUUID } from '@/utils/uuid';
@@ -259,46 +259,18 @@ export default function ChatScreen() {
         setAvatarMood('encouraging');
       }
       
-      // Create system prompt with user context
-      const systemPrompt = `You are a friendly, encouraging AI wellness companion. Always be positive, supportive, and motivational.
-      
-      User Profile:
-      - Name: ${profile?.name || 'User'}
-      - Height: ${profile?.height || 'Unknown'} cm
-      - Weight: ${profile?.weight || 'Unknown'} kg
-      - Age: ${profile?.age || 'Unknown'}
-      - Gender: ${profile?.gender || 'Unknown'}
-      - Goal: ${profile?.goal === 'weight_loss' ? 'Weight Loss' : profile?.goal === 'weight_gain' ? 'Weight Gain' : 'Healthy Lifestyle'}
-      - Exercise: ${profile?.exerciseDuration || 0} minutes/day
-      - Health conditions: ${profile?.diseases?.join(', ') || 'None'}
-      - Dietary preferences: ${profile?.dietaryPreferences?.join(', ') || 'None'}
-      - Dietary restrictions: ${profile?.dietaryRestrictions?.join(', ') || 'None'}
-      - Smoker: ${profile?.isSmoker ? 'Yes' : 'No'}
-      
-      Guidelines:
-      - Always be encouraging, positive, and supportive
-      - Provide helpful, accurate nutrition and health advice
-      - Be conversational and friendly
-      - Keep responses concise but informative (max 120 words)
-      - Use emojis appropriately but not excessively
-      - Always consider the user's profile when giving advice
-      - If asked about medical conditions, remind them to consult healthcare providers
-      - Focus on practical, actionable advice
-      - Celebrate their progress and efforts
-      - Be motivational and inspiring`;
-      
-      // Format messages for the API
+      // Format messages for the API - RAG will add enhanced system prompt with user data
       const apiMessages: CoreMessage[] = [
-        { role: 'system', content: systemPrompt },
-        ...messages.slice(-5).map(msg => ({ 
-          role: msg.role as 'user' | 'assistant', 
-          content: msg.content 
+        ...messages.slice(-5).map(msg => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content
         })),
         { role: 'user', content: inputText }
       ];
       
-      // Get response from AI
-      const response = await chatWithAI(apiMessages);
+      // Get response from AI with RAG (Retrieval-Augmented Generation)
+      // This will automatically retrieve user profile and meal data for personalized responses
+      const response = await chatWithAIRAG(apiMessages, userId);
       
       // Add AI response to chat
       const assistantMessage: Message = {
@@ -313,8 +285,6 @@ export default function ChatScreen() {
       // Ensure we show the latest messages including the new response and enable auto-scroll
       setDisplayedMessagesCount(prev => Math.max(prev, 10));
       setShouldAutoScroll(true);
-      const userId = profile?.userId;
-      if (!userId) return;
       try {
         await saveChatMessage({
           userId: userId.toString(),
@@ -397,6 +367,14 @@ export default function ChatScreen() {
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               Hi {profile?.name || 'there'}! 😊 I'm here to support your health journey with personalized advice, meal suggestions, and motivation. Let's achieve your wellness goals together!
             </Text>
+
+            {/* RAG Status Indicator */}
+            <View style={[styles.ragStatusContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.ragStatusDot} />
+              <Text style={[styles.ragStatusText, { color: colors.textSecondary }]}>
+                🧠 Smart AI with access to your profile & meal data
+              </Text>
+            </View>
             
             <View style={styles.suggestedContainer}>
               <Text style={[styles.suggestedTitle, { color: colors.text }]}>Try asking me:</Text>
@@ -716,6 +694,26 @@ const styles = StyleSheet.create({
   },
   loadOlderText: {
     fontSize: 14,
+    fontWeight: '500',
+  },
+  ragStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  ragStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4CAF50',
+    marginRight: 8,
+  },
+  ragStatusText: {
+    fontSize: 12,
     fontWeight: '500',
   },
 });
