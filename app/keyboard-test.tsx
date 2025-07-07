@@ -79,7 +79,7 @@ export default function KeyboardTestScreen() {
             placeholder="Enter text for field 1"
             returnKeyType="next"
             onSubmitEditing={() => focusNextField(input2Ref)}
-            style={styles.input}
+
           />
 
           <Input
@@ -90,7 +90,7 @@ export default function KeyboardTestScreen() {
             placeholder="Enter text for field 2"
             returnKeyType="next"
             onSubmitEditing={() => focusNextField(input3Ref)}
-            style={styles.input}
+
           />
 
           <Input
@@ -102,7 +102,7 @@ export default function KeyboardTestScreen() {
             keyboardType="email-address"
             returnKeyType="next"
             onSubmitEditing={() => focusNextField(input4Ref)}
-            style={styles.input}
+
           />
 
           <Input
@@ -114,7 +114,7 @@ export default function KeyboardTestScreen() {
             keyboardType="numeric"
             returnKeyType="next"
             onSubmitEditing={() => focusNextField(input5Ref)}
-            style={styles.input}
+
           />
 
           <Input
@@ -127,7 +127,7 @@ export default function KeyboardTestScreen() {
             numberOfLines={3}
             returnKeyType="done"
             onSubmitEditing={handleDismissKeyboard}
-            style={[styles.input, styles.multilineInput]}
+            style={styles.multilineInput}
           />
 
           <View style={styles.buttonContainer}>
@@ -197,9 +197,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
   },
-  input: {
-    marginBottom: 16,
-  },
+
   multilineInput: {
     minHeight: 80,
   },

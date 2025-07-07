@@ -415,7 +415,6 @@ export default function SignUpScreen() {
               keyboardType="number-pad"
               maxLength={6}
               leftIcon={<Lock size={20} color={colors.textSecondary} />}
-              style={styles.input}
             />
 
             <Button
@@ -495,7 +494,6 @@ export default function SignUpScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             leftIcon={<Mail size={20} color={colors.textSecondary} />}
-            style={styles.input}
           />
 
           <Input
@@ -514,7 +512,7 @@ export default function SignUpScreen() {
                 )}
               </TouchableOpacity>
             }
-            style={styles.input}
+
           />
 
           {password.length > 0 && password.length < 8 && (
@@ -596,9 +594,7 @@ const styles = StyleSheet.create({
   halfInput: {
     flex: 1,
   },
-  input: {
-    marginBottom: 16,
-  },
+
   button: {
     marginBottom: 16,
   },

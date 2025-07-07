@@ -1288,7 +1288,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 0,
   },
   halfInput: {
     width: '48%',
@@ -1300,8 +1300,8 @@ const styles = StyleSheet.create({
   emailNote: {
     fontSize: 12,
     fontStyle: 'italic',
-    marginTop: -8,
-    marginBottom: 16,
+    marginTop: -12,
+    marginBottom: 8,
   },
   pickerContainer: {
     flexDirection: 'row',

@@ -112,7 +112,7 @@ Input.displayName = 'Input';
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 0,
+    marginBottom: 16,
   },
   label: {
     fontSize: 14,

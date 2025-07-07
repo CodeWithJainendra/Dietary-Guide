@@ -236,7 +236,6 @@ export default function SignInScreen() {
                 keyboardType="number-pad"
                 maxLength={6}
                 leftIcon={<Lock size={20} color="#55b685" />}
-                containerStyle={styles.inputContainer}
                 labelStyle={styles.inputLabel}
               />
 
@@ -313,7 +312,6 @@ export default function SignInScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 leftIcon={<Mail size={20} color="#55b685" />}
-                containerStyle={styles.inputContainer}
                 labelStyle={styles.inputLabel}
               />
 
@@ -333,7 +331,7 @@ export default function SignInScreen() {
                     )}
                   </TouchableOpacity>
                 }
-                containerStyle={styles.inputContainer}
+
                 labelStyle={styles.inputLabel}
               />
 
@@ -476,14 +474,9 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   form: {
-    gap: 20,
+    gap: 0,
   },
-  input: {
-    marginBottom: 0,
-  },
-  inputContainer: {
-    marginBottom: 0,
-  },
+
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',

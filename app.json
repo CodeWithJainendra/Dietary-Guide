@@ -1,20 +1,16 @@
 {
   "expo": {
     "slug": "dietary-guide",
-    "name": "v1.0.0",
+    "name": "Dietary Guide",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo-light.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "rork-nutrition-companion",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/DGlogo-Photoroom.png",
-      "dark": {
-        "image": "./assets/images/DGlogo-Photoroom-modified.png",
-        "backgroundColor": "#181c1f"
-      },
-      "resizeMode": "cover",
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
@@ -25,10 +21,16 @@
         "NSCameraUsageDescription": "This app needs access to camera to take profile pictures.",
         "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select profile pictures."
       }
-    },
+    },  
     "android": {
+      "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo-light.png",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "splash": {
+        "image": "./assets/images/splash-icon.png",
+        "resizeMode": "contain",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
