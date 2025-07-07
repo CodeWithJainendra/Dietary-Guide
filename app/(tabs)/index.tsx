@@ -24,7 +24,7 @@ import LogMealForm from '@/components/LogMealForm';
 import MealCard from '@/components/MealCard';
 import AvatarEmoji from '@/components/AvatarEmoji';
 import { MealEntry } from '@/types';
-import { Plus, TrendingUp, Calendar, Utensils, Award } from 'lucide-react-native';
+import { Plus, TrendingUp, Calendar, Utensils, Award, ChevronDown, ChevronUp } from 'lucide-react-native';
 import AIRecommendations from '@/components/AIRecommendations';
 import AIStatusBanner from '@/components/AIStatusBanner';
 
@@ -48,6 +48,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [avatarScale] = useState(new Animated.Value(0));
   const [streakCount, setStreakCount] = useState(0);
+  const [showAllMeals, setShowAllMeals] = useState(false);
 
 
   const avatarRef = useRef(null);
@@ -451,13 +452,32 @@ export default function HomeScreen() {
           
           {todayMeals.length > 0 ? (
             <View style={styles.mealsList}>
-              {todayMeals.slice(0, 3).map((meal) => (
+              {(showAllMeals ? todayMeals : todayMeals.slice(0, 3)).map((meal) => (
                 <MealCard key={meal.id} meal={meal} />
               ))}
               {todayMeals.length > 3 && (
-                <Text style={[styles.moreText, { color: colors.textSecondary }]}>
-                  +{todayMeals.length - 3} more meals
-                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.moreButton,
+                    { backgroundColor: colors.primary + '10' }
+                  ]}
+                  onPress={() => setShowAllMeals(!showAllMeals)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.moreButtonContent}>
+                    <Text style={[styles.moreText, { color: colors.primary }]}>
+                      {showAllMeals
+                        ? 'Show less'
+                        : `+${todayMeals.length - 3} more meals`
+                      }
+                    </Text>
+                    {showAllMeals ? (
+                      <ChevronUp size={16} color={colors.primary} style={styles.moreIcon} />
+                    ) : (
+                      <ChevronDown size={16} color={colors.primary} style={styles.moreIcon} />
+                    )}
+                  </View>
+                </TouchableOpacity>
               )}
             </View>
           ) : (
@@ -647,10 +667,26 @@ const styles = StyleSheet.create({
   mealsList: {
     gap: 12,
   },
+  moreButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+  },
+  moreButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   moreText: {
     fontSize: 14,
     textAlign: 'center',
-    marginTop: 8,
+    fontWeight: '600',
+  },
+  moreIcon: {
+    marginLeft: 6,
   },
   emptyMeals: {
     alignItems: 'center',

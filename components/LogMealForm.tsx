@@ -454,58 +454,62 @@ export default function LogMealForm({ onSubmit }: LogMealFormProps) {
           </View>
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputGroupLabel, { color: colors.text }]}>
-            What did you eat?
-          </Text>
-          <Input
-            label=""
-            value={foodName}
-            onChangeText={(text) => {
-              setFoodName(text);
-              if (errors.foodName) setErrors(prev => ({ ...prev, foodName: undefined }));
-            }}
-            placeholder="e.g., Grilled chicken breast, Apple, Pasta with tomato sauce"
-            error={errors.foodName}
-            leftIcon={<Utensils size={20} color={colors.textSecondary} />}
-            style={[styles.input, styles.enhancedInput]}
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputGroupLabel, { color: colors.text }]}>
-            How much did you eat?
-          </Text>
-          <Input
-            label=""
-            value={quantity}
-            onChangeText={(text) => {
-              setQuantity(text);
-              if (errors.quantity) setErrors(prev => ({ ...prev, quantity: undefined }));
-            }}
-            placeholder="e.g., 1 cup, 150g, 1 medium, 2 slices"
-            error={errors.quantity}
-            leftIcon={<Utensils size={20} color={colors.textSecondary} />}
-            style={[styles.input, styles.enhancedInput]}
-          />
-
-          {/* Quick quantity suggestions */}
-          <View style={styles.quickSuggestions}>
-            <Text style={[styles.quickSuggestionsLabel, { color: colors.textSecondary }]}>
-              Quick suggestions:
+        <View style={styles.foodDetailsContainer}>
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputGroupLabel, { color: colors.text }]}>
+              What did you eat?
             </Text>
-            <View style={styles.suggestionTags}>
-              {['1 cup', '100g', '1 medium', '2 slices', '1 tbsp'].map((suggestion) => (
-                <TouchableOpacity
-                  key={suggestion}
-                  style={[styles.suggestionTag, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => setQuantity(suggestion)}
-                >
-                  <Text style={[styles.suggestionTagText, { color: colors.textSecondary }]}>
-                    {suggestion}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <Input
+              label=""
+              value={foodName}
+              onChangeText={(text) => {
+                setFoodName(text);
+                if (errors.foodName) setErrors(prev => ({ ...prev, foodName: undefined }));
+              }}
+              placeholder="e.g., Grilled chicken breast, Apple, Pasta with tomato sauce"
+              error={errors.foodName}
+              leftIcon={<Utensils size={20} color={colors.textSecondary} />}
+              containerStyle={styles.inputContainer}
+              inputStyle={styles.enhancedInput}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputGroupLabel, { color: colors.text }]}>
+              How much did you eat?
+            </Text>
+            <Input
+              label=""
+              value={quantity}
+              onChangeText={(text) => {
+                setQuantity(text);
+                if (errors.quantity) setErrors(prev => ({ ...prev, quantity: undefined }));
+              }}
+              placeholder="e.g., 1 cup, 150g, 1 medium, 2 slices"
+              error={errors.quantity}
+              leftIcon={<Utensils size={20} color={colors.textSecondary} />}
+              containerStyle={styles.inputContainer}
+              inputStyle={styles.enhancedInput}
+            />
+
+            {/* Quick quantity suggestions */}
+            <View style={styles.quickSuggestions}>
+              <Text style={[styles.quickSuggestionsLabel, { color: colors.textSecondary }]}>
+                Quick suggestions:
+              </Text>
+              <View style={styles.suggestionTags}>
+                {['1 cup', '100g', '1 medium', '2 slices', '1 tbsp'].map((suggestion) => (
+                  <TouchableOpacity
+                    key={suggestion}
+                    style={[styles.suggestionTag, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => setQuantity(suggestion)}
+                  >
+                    <Text style={[styles.suggestionTagText, { color: colors.textSecondary }]}>
+                      {suggestion}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
         </View>
@@ -852,43 +856,66 @@ const styles = StyleSheet.create({
   },
 
   // Input Styles
-  input: {
-    marginBottom: 20,
+  foodDetailsContainer: {
+    paddingTop: 4,
   },
   inputGroup: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   inputGroupLabel: {
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
+    lineHeight: 20,
+  },
+  inputContainer: {
+    marginBottom: 0, // Remove default margin from Input component
   },
   enhancedInput: {
     borderRadius: 12,
     backgroundColor: 'rgba(0,0,0,0.02)',
+    fontSize: 14,
+    fontWeight: '400',
   },
   quickSuggestions: {
-    marginTop: 12,
+    marginTop: 16,
+    paddingTop: 4,
   },
   quickSuggestionsLabel: {
     fontSize: 12,
     fontWeight: '500',
-    marginBottom: 8,
+    marginBottom: 10,
+    lineHeight: 16,
   },
   suggestionTags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    alignItems: 'center',
+    marginTop: 2,
   },
   suggestionTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
     borderWidth: 1,
+    minHeight: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   suggestionTagText: {
     fontSize: 12,
     fontWeight: '500',
+    lineHeight: 16,
+    textAlign: 'center',
   },
 
   // AI Note Styles
